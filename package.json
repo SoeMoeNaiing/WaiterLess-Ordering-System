@@ -1,0 +1,16 @@
+{
+  "name": "restaurant-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "LAN-only QR table ordering system for restaurants",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test tests/"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
