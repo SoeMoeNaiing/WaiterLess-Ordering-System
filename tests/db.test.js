@@ -49,14 +49,15 @@ test('re-opening the same DB does not re-apply migrations (idempotent)', () => {
   const path = join(dir, 'test.db');
   try {
     const db1 = createDb(path, { quiet: true });
+    const after1 = db1.prepare('SELECT COUNT(*) AS c FROM _migrations').get().c;
     db1.close();
 
     const db2 = createDb(path, { quiet: true });
-    const count = db2
-      .prepare('SELECT COUNT(*) AS c FROM _migrations')
-      .get().c;
-    assert.equal(count, 1, 'should not re-apply 001_init.sql');
+    const after2 = db2.prepare('SELECT COUNT(*) AS c FROM _migrations').get().c;
     db2.close();
+
+    assert.equal(after2, after1, 'reopening must not add new migration records');
+    assert.ok(after1 >= 1, 'at least one migration should have run');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
