@@ -10,19 +10,19 @@ const MIGRATIONS_DIR = join(__dirname, 'migrations');
  * Open (or create) a SQLite database at `path` and run all pending
  * migrations from server/migrations/ in filename order.
  *
+ * Options:
+ *   quiet: if true, suppress migration log lines (useful in tests)
+ *
  * Pass ':memory:' for tests.
  */
-export function createDb(path = ':memory:') {
+export function createDb(path = ':memory:', { quiet = false } = {}) {
   const db = new Database(path);
 
-  // Sensible pragmas:
-  // - WAL for concurrent reads during writes (no-op on :memory:)
-  // - foreign_keys ON so ON DELETE CASCADE actually works
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
   ensureMigrationsTable(db);
-  runMigrations(db);
+  runMigrations(db, { quiet });
   return db;
 }
 
@@ -35,7 +35,7 @@ function ensureMigrationsTable(db) {
   `);
 }
 
-function runMigrations(db) {
+function runMigrations(db, { quiet }) {
   const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith('.sql'))
     .sort();
@@ -57,6 +57,6 @@ function runMigrations(db) {
     });
 
     apply();
-    console.log(`[db] applied migration ${file}`);
+    if (!quiet) console.log(`[db] applied migration ${file}`);
   }
 }

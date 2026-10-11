@@ -4,16 +4,33 @@ import { lanOnly } from './middleware/lanOnly.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
-export function createApp() {
+export function createApp({ db } = {}) {
   const app = express();
 
   app.use(express.json());
-
-  // Security: only requests from the shop LAN (or loopback) get through.
   app.use(lanOnly(LAN_PREFIX));
 
   app.get('/health', (req, res) => {
-    res.json({ ok: true, time: new Date().toISOString() });
+    let dbStatus = 'unavailable';
+    try {
+      if (db) {
+        db.prepare('SELECT 1').get();
+        dbStatus = 'connected';
+      }
+    } catch {
+      dbStatus = 'error';
+      return res.status(500).json({
+        ok: false,
+        db: dbStatus,
+        time: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      ok: true,
+      db: dbStatus,
+      time: new Date().toISOString(),
+    });
   });
 
   return app;
