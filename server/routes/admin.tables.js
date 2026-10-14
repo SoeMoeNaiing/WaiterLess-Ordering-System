@@ -31,10 +31,27 @@ export function adminTablesRouter({ db }) {
       if (String(err.message).includes('UNIQUE constraint failed')) {
         return res.status(409).json({ error: 'table_number already exists' });
       }
-      // Unexpected — log and 500
       console.error('[admin.tables] POST error:', err);
       return res.status(500).json({ error: 'internal error' });
     }
+  });
+
+  // GET /api/admin/tables[?active=1|0]
+  router.get('/', (req, res) => {
+    const { active } = req.query;
+
+    let rows;
+    if (active === '1' || active === '0') {
+      rows = db
+        .prepare('SELECT * FROM tables WHERE is_active = ? ORDER BY table_number')
+        .all(Number(active));
+    } else {
+      rows = db
+        .prepare('SELECT * FROM tables ORDER BY table_number')
+        .all();
+    }
+
+    res.json(rows);
   });
 
   return router;
