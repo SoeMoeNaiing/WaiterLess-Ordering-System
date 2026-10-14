@@ -17,3 +17,10 @@ test('GET /admin redirects to /admin/ (express.static default)', async () => {
   assert.equal(res.status, 301);
   assert.equal(res.headers.location, '/admin/');
 });
+
+test('GET /admin/app.js returns JavaScript', async () => {
+  const app = createApp();
+  const res = await request(app).get('/admin/app.js');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /javascript/);
+});
