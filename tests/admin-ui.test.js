@@ -8,7 +8,7 @@ test('GET /admin/ returns the admin HTML page', async () => {
   const res = await request(app).get('/admin/');
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /^text\/html/);
-  assert.match(res.text, /Admin panel/);
+  assert.match(res.text, /Admin/);
 });
 
 test('GET /admin redirects to /admin/ (express.static default)', async () => {

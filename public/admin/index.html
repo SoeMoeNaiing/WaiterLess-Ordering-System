@@ -33,56 +33,94 @@
     button.danger { color: #b02a37; border-color: #b02a37; }
     button.danger:hover { background: #fbeaec; }
     .actions { display: flex; gap: 0.5rem; }
-    input[type="text"] { font: inherit; padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 6px; width: 100%; }
+    input[type="text"], input[type="password"], input[type="number"], select {
+      font: inherit; padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 6px;
+    }
+    input[type="text"], input[type="password"] { width: 100%; }
     .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
     .form-row input { flex: 1; }
     .muted { color: #888; font-size: 0.9rem; }
     .error { color: #b02a37; }
+    .thumb { width: 64px; height: 64px; object-fit: cover; border: 1px solid #eee; border-radius: 4px; background: #f8f8f8; }
 
-        .thumb { width: 64px; height: 64px; object-fit: cover; border: 1px solid #eee; border-radius: 4px; background: #f8f8f8; }
-    select { font: inherit; padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 6px; }
+    /* Login view */
+    #login-view {
+      max-width: 340px; margin: 4rem auto;
+      text-align: center;
+    }
+    #login-view h1 { margin-bottom: 2rem; }
+    #login-view input { text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem; }
+    #login-view button { width: 100%; margin-top: 0.75rem; padding: 0.75rem; font-size: 1rem; }
+    #login-view .error { margin-top: 0.75rem; min-height: 1.2rem; }
+
+    /* App view */
+    #app-view { display: none; }
+    .app-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .app-header h1 { margin: 0; }
   </style>
 </head>
 <body>
-  <h1>Admin panel</h1>
-  <p class="muted" id="status">loading…</p>
 
-  <div class="card">
-    <h2>Add table</h2>
-    <div class="form-row">
-      <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" />
-      <input id="new-table-label" type="text" placeholder="Label (optional)" />
-      <button id="add-table" class="primary">Add</button>
+  <!-- Login view -->
+  <section id="login-view">
+    <h1>Admin</h1>
+    <p class="muted">Enter the admin PIN</p>
+    <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" />
+    <button id="pin-submit" class="primary">Log in</button>
+    <div id="pin-error" class="error"></div>
+  </section>
+
+  <!-- Main app view -->
+  <section id="app-view">
+    <div class="app-header">
+      <h1>Admin</h1>
+      <button id="logout-btn" class="danger">Log out</button>
     </div>
-    <p id="add-error" class="error"></p>
-  </div>
-  <div class="card">
-    <h2>Categories</h2>
-    <div class="form-row">
-      <input id="new-category-name" type="text" placeholder="Category name (e.g. Starters)" />
-      <input id="new-category-order" type="number" placeholder="Sort order" value="0" style="max-width: 8rem;" />
-      <button id="add-category" class="primary">Add</button>
-    </div>
-    <p id="add-category-error" class="error"></p>
-    <div id="categories"><p class="muted">loading…</p></div>
-  </div>
+
+    <p class="muted" id="status">loading…</p>
+
     <div class="card">
-    <h2>Menu items</h2>
-        <div class="form-row">
-      <input id="new-item-name" type="text" placeholder="Item name" />
-      <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 8rem;" />
-      <select id="new-item-category" style="flex: 1;"></select>
-      <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 14rem;" />
-      <button id="add-item" class="primary">Add</button>
+      <h2>Add table</h2>
+      <div class="form-row">
+        <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" />
+        <input id="new-table-label" type="text" placeholder="Label (optional)" />
+        <button id="add-table" class="primary">Add</button>
+      </div>
+      <p id="add-error" class="error"></p>
     </div>
-    <p id="add-item-error" class="error"></p>
-    <div id="menu-items"><p class="muted">loading…</p></div>
-  </div>
-  <div class="card">
-    <h2>Tables</h2>
-    <div id="tables"><p class="muted">loading…</p></div>
 
-  </div>
+    <div class="card">
+      <h2>Categories</h2>
+      <div class="form-row">
+        <input id="new-category-name" type="text" placeholder="Category name" />
+        <input id="new-category-order" type="number" placeholder="Order" value="0" style="max-width: 6rem;" />
+        <button id="add-category" class="primary">Add</button>
+      </div>
+      <p id="add-category-error" class="error"></p>
+      <div id="categories"><p class="muted">loading…</p></div>
+    </div>
+
+    <div class="card">
+      <h2>Menu items</h2>
+      <div class="form-row">
+        <input id="new-item-name" type="text" placeholder="Item name" />
+        <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" />
+        <select id="new-item-category" style="flex: 1;"></select>
+        <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 12rem;" />
+        <button id="add-item" class="primary">Add</button>
+      </div>
+      <p id="add-item-error" class="error"></p>
+      <div id="menu-items"><p class="muted">loading…</p></div>
+    </div>
+
+    <div class="card">
+      <h2>Tables</h2>
+      <div id="tables"><p class="muted">loading…</p></div>
+    </div>
+  </section>
 
   <script src="/admin/app.js"></script>
 </body>

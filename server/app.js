@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
 import { lanOnly } from './middleware/lanOnly.js';
+import { createRateLimiter } from './middleware/loginRateLimit.js';
+import { adminAuthRouter } from './routes/admin.auth.js';
+import { kitchenAuthRouter } from './routes/kitchen.auth.js';
 import { adminTablesRouter } from './routes/admin.tables.js';
 import { adminCategoriesRouter } from './routes/admin.categories.js';
 import { adminMenuItemsRouter } from './routes/admin.menu-items.js';
@@ -12,6 +15,7 @@ const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
 export function createApp({ db } = {}) {
   const app = express();
+  const rateLimit = createRateLimiter();
 
   app.use(express.json());
   app.use(lanOnly(LAN_PREFIX));
@@ -40,15 +44,19 @@ export function createApp({ db } = {}) {
     });
   });
 
+  // Auth routes — must be mounted BEFORE the routers they'll eventually gate
+  app.use('/api/admin/auth', adminAuthRouter({ db, rateLimit }));
+  app.use('/api/kitchen/auth', kitchenAuthRouter({ db, rateLimit }));
+
   if (db) {
+    // --- These will be gated in 8.1b ---
     app.use('/api/admin/tables', adminTablesRouter({ db }));
     app.use('/api/admin/categories', adminCategoriesRouter({ db }));
     app.use('/api/admin/menu-items', adminMenuItemsRouter({ db }));
+    app.use('/api/admin/upload', adminUploadRouter());
     app.use('/api/kitchen', kitchenRouter({ db }));
     app.use(customerRouter({ db }));
   }
-
-  app.use('/api/admin/upload', adminUploadRouter());
 
   return app;
 }
