@@ -53,10 +53,20 @@
     </div>
     <p id="add-error" class="error"></p>
   </div>
-
+  <div class="card">
+    <h2>Categories</h2>
+    <div class="form-row">
+      <input id="new-category-name" type="text" placeholder="Category name (e.g. Starters)" />
+      <input id="new-category-order" type="number" placeholder="Sort order" value="0" style="max-width: 8rem;" />
+      <button id="add-category" class="primary">Add</button>
+    </div>
+    <p id="add-category-error" class="error"></p>
+    <div id="categories"><p class="muted">loading…</p></div>
+  </div>
   <div class="card">
     <h2>Tables</h2>
     <div id="tables"><p class="muted">loading…</p></div>
+
   </div>
 
   <script src="/admin/app.js"></script>

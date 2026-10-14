@@ -24,3 +24,10 @@ test('GET /admin/app.js returns JavaScript', async () => {
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /javascript/);
 });
+
+test('GET /admin/app.js references categories endpoint', async () => {
+  const app = createApp();
+  const res = await request(app).get('/admin/app.js');
+  assert.equal(res.status, 200);
+  assert.match(res.text, /\/api\/admin\/categories/);
+});

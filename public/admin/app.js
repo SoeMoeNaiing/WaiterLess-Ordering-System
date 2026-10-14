@@ -28,6 +28,8 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+// ---------- Tables ----------
+
 async function refresh() {
   const [health, tables] = await Promise.all([
     fetch('/health').then(r => r.json()),
@@ -112,6 +114,93 @@ $('add-table').onclick = async () => {
   }
 };
 
-refresh().catch(e => {
+// ---------- Categories ----------
+
+async function refreshCategories() {
+  const cats = await api('/api/admin/categories');
+  const root = $('categories');
+  root.replaceChildren();
+
+  if (cats.length === 0) {
+    root.appendChild(el('p', { className: 'muted', text: 'No categories yet.' }));
+    return;
+  }
+
+  for (const c of cats) {
+    root.appendChild(renderCategory(c));
+  }
+}
+
+function renderCategory(c) {
+  const name = el('input', {
+    type: 'text',
+    value: c.name,
+    style: 'flex:1; max-width: 16rem;',
+  });
+
+  const order = el('input', {
+    type: 'number',
+    value: c.sort_order,
+    style: 'max-width: 6rem;',
+  });
+
+  const save = el('button', {
+    text: 'Save',
+    onclick: async () => {
+      await api(`/api/admin/categories/${c.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: name.value.trim(),
+          sort_order: Number(order.value) || 0,
+        }),
+      });
+      await refreshCategories();
+    },
+  });
+
+  const del = el('button', {
+    text: 'Delete',
+    className: 'danger',
+    onclick: async () => {
+      if (!confirm(`Delete "${c.name}"? Items in it will become uncategorized.`)) return;
+      await api(`/api/admin/categories/${c.id}`, { method: 'DELETE' });
+      await refreshCategories();
+    },
+  });
+
+  return el('div', { className: 'row' }, [
+    el('div', { className: 'info', style: 'display:flex; gap:0.5rem; align-items:center;' }, [
+      name, order,
+    ]),
+    el('div', { className: 'actions' }, [save, del]),
+  ]);
+}
+
+$('add-category').onclick = async () => {
+  const name = $('new-category-name').value.trim();
+  const sort_order = Number($('new-category-order').value) || 0;
+  $('add-category-error').textContent = '';
+
+  if (!name) {
+    $('add-category-error').textContent = 'Name is required.';
+    return;
+  }
+
+  try {
+    await api('/api/admin/categories', {
+      method: 'POST',
+      body: JSON.stringify({ name, sort_order }),
+    });
+    $('new-category-name').value = '';
+    $('new-category-order').value = '0';
+    await refreshCategories();
+  } catch (e) {
+    $('add-category-error').textContent = e.message;
+  }
+};
+
+// ---------- Boot ----------
+
+Promise.all([refresh(), refreshCategories()]).catch(e => {
   $('status').textContent = 'error loading: ' + e.message;
 });
