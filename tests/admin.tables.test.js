@@ -416,3 +416,76 @@ test('regenerate-token on invalid id returns 400', async () => {
   assert.equal(res.status, 400);
   db.close();
 });
+
+// ---------- GET /api/admin/tables/:id/qr.png ----------
+
+function getBuffer(res) {
+  if (Buffer.isBuffer(res.body) && res.body.length > 0) return res.body;
+  if (typeof res.text === 'string' && res.text.length > 0) return Buffer.from(res.text, 'binary');
+  return Buffer.alloc(0);
+}
+
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+test('QR endpoint returns a PNG', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const res = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png`);
+
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /^image\/png/);
+
+  const buf = getBuffer(res);
+  assert.ok(buf.length > 0, 'response should have bytes');
+  assert.deepEqual(buf.subarray(0, 4), PNG_MAGIC, 'should start with PNG magic bytes');
+  db.close();
+});
+
+test('QR endpoint returns 404 for unknown id', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/admin/tables/9999/qr.png');
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('QR endpoint returns 400 for invalid id', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/admin/tables/abc/qr.png');
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('QR endpoints for two different tables return different bytes', async () => {
+  const { app, db } = appWithDb();
+  const a = await request(app).post('/api/admin/tables').send({ table_number: 'A' });
+  const b = await request(app).post('/api/admin/tables').send({ table_number: 'B' });
+
+  const ra = await request(app).get(`/api/admin/tables/${a.body.id}/qr.png`);
+  const rb = await request(app).get(`/api/admin/tables/${b.body.id}/qr.png`);
+
+  assert.notDeepEqual(getBuffer(ra), getBuffer(rb));
+  db.close();
+});
+
+test('regenerating the token changes the QR bytes', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const before = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png`);
+  await request(app).post(`/api/admin/tables/${created.body.id}/regenerate-token`).send();
+  const after = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png`);
+
+  assert.notDeepEqual(getBuffer(before), getBuffer(after));
+  db.close();
+});
+
+test('QR endpoint accepts a size query param without erroring', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const res = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png?size=256`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /^image\/png/);
+  db.close();
+});

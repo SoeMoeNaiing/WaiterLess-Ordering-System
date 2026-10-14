@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import QRCode from 'qrcode';
 import { newTableToken } from '../utils/tokens.js';
 
 export function adminTablesRouter({ db }) {
@@ -149,5 +150,37 @@ export function adminTablesRouter({ db }) {
     res.json(updated);
   });
 
-  return router;   // ← MUST be the last line inside the function
+  // GET /api/admin/tables/:id/qr.png[?size=N]
+  router.get('/:id/qr.png', async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'invalid id' });
+    }
+
+    const row = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
+    if (!row) {
+      return res.status(404).json({ error: 'table not found' });
+    }
+
+    const size = Math.min(Math.max(Number(req.query.size) || 400, 128), 1024);
+
+    const base = process.env.PUBLIC_BASE_URL
+      || `${req.protocol}://${req.get('host')}`;
+    const target = `${base}/t/${row.qr_token}`;
+
+    try {
+      const buf = await QRCode.toBuffer(target, {
+        type: 'png',
+        width: size,
+        margin: 1,
+        errorCorrectionLevel: 'M',
+      });
+      res.type('png').send(buf);
+    } catch (err) {
+      console.error('[admin.tables] QR error:', err);
+      res.status(500).json({ error: 'failed to generate QR' });
+    }
+  });
+
+  return router;   // ← MUST be the last statement in the function
 }
