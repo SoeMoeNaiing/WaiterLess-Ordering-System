@@ -6,6 +6,7 @@ import { adminCategoriesRouter } from './routes/admin.categories.js';
 import { adminMenuItemsRouter } from './routes/admin.menu-items.js';
 import { adminUploadRouter } from './routes/admin.upload.js';
 import { customerRouter } from './routes/customer.js';
+import { kitchenRouter } from './routes/kitchen.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
@@ -42,6 +43,7 @@ export function createApp({ db } = {}) {
     app.use('/api/admin/tables', adminTablesRouter({ db }));
     app.use('/api/admin/categories', adminCategoriesRouter({ db }));
     app.use('/api/admin/menu-items', adminMenuItemsRouter({ db }));
+    app.use('/api/kitchen', kitchenRouter({ db }));
     app.use(customerRouter({ db }));
   }
 
