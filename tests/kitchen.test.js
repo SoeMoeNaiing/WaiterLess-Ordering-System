@@ -103,3 +103,93 @@ test('kitchen orders includes preparing and ready', async () => {
   assert.equal(res.body[0].status, 'preparing');
   db.close();
 });
+
+// ---------- PATCH /api/kitchen/orders/:id ----------
+
+test('PATCH updates status from placed to preparing', async () => {
+  const { app, db } = appWithDb();
+  const { table, item } = await makeTableAndItem(app);
+  const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+
+  const res = await request(app)
+    .patch(`/api/kitchen/orders/${o.order.id}`)
+    .send({ status: 'preparing' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.status, 'preparing');
+  assert.equal(res.body.items.length, 1);
+  db.close();
+});
+
+test('PATCH can walk through preparing -> ready -> served', async () => {
+  const { app, db } = appWithDb();
+  const { table, item } = await makeTableAndItem(app);
+  const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+
+  for (const s of ['preparing', 'ready', 'served']) {
+    const res = await request(app)
+      .patch(`/api/kitchen/orders/${o.order.id}`)
+      .send({ status: s });
+    assert.equal(res.body.status, s);
+  }
+  db.close();
+});
+
+test('PATCH accepts cancelled', async () => {
+  const { app, db } = appWithDb();
+  const { table, item } = await makeTableAndItem(app);
+  const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+
+  const res = await request(app)
+    .patch(`/api/kitchen/orders/${o.order.id}`)
+    .send({ status: 'cancelled' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.status, 'cancelled');
+  db.close();
+});
+
+test('PATCH rejects unknown status with 400', async () => {
+  const { app, db } = appWithDb();
+  const { table, item } = await makeTableAndItem(app);
+  const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+
+  const res = await request(app)
+    .patch(`/api/kitchen/orders/${o.order.id}`)
+    .send({ status: 'bogus' });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('PATCH with empty body returns 400', async () => {
+  const { app, db } = appWithDb();
+  const { table, item } = await makeTableAndItem(app);
+  const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+
+  const res = await request(app).patch(`/api/kitchen/orders/${o.order.id}`).send({});
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('PATCH updates notes without touching status', async () => {
+  const { app, db } = appWithDb();
+  const { table, item } = await makeTableAndItem(app);
+  const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+
+  const res = await request(app)
+    .patch(`/api/kitchen/orders/${o.order.id}`)
+    .send({ notes: 'No onions' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.notes, 'No onions');
+  assert.equal(res.body.status, 'placed');
+  db.close();
+});
+
+test('PATCH on unknown id returns 404', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app)
+    .patch('/api/kitchen/orders/9999')
+    .send({ status: 'preparing' });
+  assert.equal(res.status, 404);
+  db.close();
+});
