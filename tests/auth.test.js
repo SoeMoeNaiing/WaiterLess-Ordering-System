@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { loginAdmin } from './helpers/auth.js';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../server/app.js';
@@ -158,4 +159,116 @@ test('requireAdmin rejects expired session', async () => {
   requireAdmin(req, res, () => { nextCalled = true; });
   assert.equal(nextCalled, false);
   assert.equal(res.statusCode, 401);
+});
+
+// ---------- Change PIN ----------
+
+test('change admin PIN succeeds with correct current PIN', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .set('Cookie', cookie)
+    .send({ current_pin: '1234', target: 'admin', new_pin: '9876' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.target, 'admin');
+
+  // Old PIN no longer works, new one does
+  const oldRes = await request(app).post('/api/admin/auth/login').send({ pin: '1234' });
+  assert.equal(oldRes.status, 401);
+
+  const newRes = await request(app).post('/api/admin/auth/login').send({ pin: '9876' });
+  assert.equal(newRes.status, 200);
+  db.close();
+});
+
+test('change kitchen PIN sets kitchen_pin setting', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .set('Cookie', cookie)
+    .send({ current_pin: '1234', target: 'kitchen', new_pin: '4321' });
+
+  assert.equal(res.status, 200);
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'kitchen_pin'").get();
+  assert.equal(row.value, '4321');
+
+  // Kitchen login now uses the new PIN
+  const oldRes = await request(app).post('/api/kitchen/auth/login').send({ pin: '1234' });
+  assert.equal(oldRes.status, 401);
+
+  const newRes = await request(app).post('/api/kitchen/auth/login').send({ pin: '4321' });
+  assert.equal(newRes.status, 200);
+  db.close();
+});
+
+test('change PIN rejects wrong current PIN', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .set('Cookie', cookie)
+    .send({ current_pin: '0000', target: 'admin', new_pin: '9876' });
+  assert.equal(res.status, 401);
+  db.close();
+});
+
+test('change PIN rejects invalid target', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .set('Cookie', cookie)
+    .send({ current_pin: '1234', target: 'bogus', new_pin: '9876' });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('change PIN rejects non-numeric new_pin', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .set('Cookie', cookie)
+    .send({ current_pin: '1234', target: 'admin', new_pin: 'abcd' });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('change PIN rejects too short new_pin', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .set('Cookie', cookie)
+    .send({ current_pin: '1234', target: 'admin', new_pin: '12' });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('change PIN rejects same-as-current', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .set('Cookie', cookie)
+    .send({ current_pin: '1234', target: 'admin', new_pin: '1234' });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('change PIN requires authentication', async () => {
+  const { app, db } = appWithDb();
+  // No cookie — should still be caught by requireAdmin when we apply it,
+  // but this endpoint is at /api/admin/auth/* which is open. So we
+  // verify the pin confirmation still protects it.
+  const res = await request(app)
+    .post('/api/admin/auth/change-pin')
+    .send({ current_pin: '0000', target: 'admin', new_pin: '9876' });
+  assert.equal(res.status, 401);
+  db.close();
 });

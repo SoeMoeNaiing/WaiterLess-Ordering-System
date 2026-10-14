@@ -1,10 +1,16 @@
 const $ = (id) => document.getElementById(id);
 
+// ---------- Helpers ----------
+
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
+  if (res.status === 401) {
+    showLogin();
+    throw new Error('unauthorized');
+  }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { msg = (await res.json()).error || msg; } catch {}
@@ -17,7 +23,9 @@ function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'text') node.textContent = v;
+    else if (k === 'className') node.className = v;
     else if (k === 'onclick') node.onclick = v;
+    else if (k === 'onerror') node.onerror = v;
     else if (k.startsWith('data-')) node.setAttribute(k, v);
     else node[k] = v;
   }
@@ -28,6 +36,47 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+// ---------- Auth ----------
+
+function showLogin() {
+  $('login-view').style.display = 'block';
+  $('app-view').style.display = 'none';
+  $('pin-error').textContent = '';
+  $('pin-input').value = '';
+  setTimeout(() => $('pin-input').focus(), 50);
+}
+
+function showApp() {
+  $('login-view').style.display = 'none';
+  $('app-view').style.display = 'block';
+}
+
+async function login() {
+  const pin = $('pin-input').value.trim();
+  $('pin-error').textContent = '';
+  if (!pin) { $('pin-error').textContent = 'Enter a PIN.'; return; }
+
+  const res = await fetch('/api/admin/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    $('pin-error').textContent =
+      res.status === 429 ? 'Too many attempts. Try again later.' :
+      (body.error || 'Login failed.');
+    return;
+  }
+  showApp();
+  loadApp();
+}
+
+async function logout() {
+  await fetch('/api/admin/auth/logout', { method: 'POST' });
+  showLogin();
+}
+
 // ---------- Tables ----------
 
 async function refresh() {
@@ -35,19 +84,23 @@ async function refresh() {
     fetch('/health').then(r => r.json()),
     api('/api/admin/tables'),
   ]);
+
   $('status').textContent = `db: ${health.db} — ${tables.length} table(s)`;
 
   const root = $('tables');
   root.replaceChildren();
+
   if (tables.length === 0) {
     root.appendChild(el('p', { className: 'muted', text: 'No tables yet. Add one above.' }));
     return;
   }
+
   for (const t of tables) root.appendChild(renderTable(t));
 }
 
 function renderTable(t) {
   const img = el('img', { src: `/api/admin/tables/${t.id}/qr.png?size=192`, alt: `QR for ${t.table_number}` });
+
   const info = el('div', { className: 'info' }, [
     el('div', { className: 'num' }, [
       t.table_number,
@@ -89,7 +142,12 @@ $('add-table').onclick = async () => {
   const table_number = $('new-table-number').value.trim();
   const label = $('new-table-label').value.trim();
   $('add-error').textContent = '';
-  if (!table_number) { $('add-error').textContent = 'Table number is required.'; return; }
+
+  if (!table_number) {
+    $('add-error').textContent = 'Table number is required.';
+    return;
+  }
+
   try {
     await api('/api/admin/tables', {
       method: 'POST',
@@ -98,7 +156,9 @@ $('add-table').onclick = async () => {
     $('new-table-number').value = '';
     $('new-table-label').value = '';
     await refresh();
-  } catch (e) { $('add-error').textContent = e.message; }
+  } catch (e) {
+    $('add-error').textContent = e.message;
+  }
 };
 
 // ---------- Categories ----------
@@ -107,10 +167,12 @@ async function refreshCategories() {
   const cats = await api('/api/admin/categories');
   const root = $('categories');
   root.replaceChildren();
+
   if (cats.length === 0) {
     root.appendChild(el('p', { className: 'muted', text: 'No categories yet.' }));
     return;
   }
+
   for (const c of cats) root.appendChild(renderCategory(c));
 }
 
@@ -123,9 +185,12 @@ function renderCategory(c) {
     onclick: async () => {
       await api(`/api/admin/categories/${c.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ name: name.value.trim(), sort_order: Number(order.value) || 0 }),
+        body: JSON.stringify({
+          name: name.value.trim(),
+          sort_order: Number(order.value) || 0,
+        }),
       });
-      await Promise.all([refreshCategories(), refreshMenuItems()]);
+      await refreshCategories();
     },
   });
 
@@ -135,7 +200,7 @@ function renderCategory(c) {
     onclick: async () => {
       if (!confirm(`Delete "${c.name}"? Items in it will become uncategorized.`)) return;
       await api(`/api/admin/categories/${c.id}`, { method: 'DELETE' });
-      await Promise.all([refreshCategories(), refreshMenuItems()]);
+      await refreshCategories();
     },
   });
 
@@ -149,7 +214,12 @@ $('add-category').onclick = async () => {
   const name = $('new-category-name').value.trim();
   const sort_order = Number($('new-category-order').value) || 0;
   $('add-category-error').textContent = '';
-  if (!name) { $('add-category-error').textContent = 'Name is required.'; return; }
+
+  if (!name) {
+    $('add-category-error').textContent = 'Name is required.';
+    return;
+  }
+
   try {
     await api('/api/admin/categories', {
       method: 'POST',
@@ -158,7 +228,9 @@ $('add-category').onclick = async () => {
     $('new-category-name').value = '';
     $('new-category-order').value = '0';
     await refreshCategories();
-  } catch (e) { $('add-category-error').textContent = e.message; }
+  } catch (e) {
+    $('add-category-error').textContent = e.message;
+  }
 };
 
 // ---------- Menu items ----------
@@ -177,10 +249,12 @@ async function refreshMenuItems() {
 
   const root = $('menu-items');
   root.replaceChildren();
+
   if (items.length === 0) {
     root.appendChild(el('p', { className: 'muted', text: 'No menu items yet.' }));
     return;
   }
+
   for (const item of items) root.appendChild(renderMenuItem(item, cats));
 }
 
@@ -203,6 +277,7 @@ function renderMenuItem(item, cats) {
     const fd = new FormData();
     fd.append('file', f);
     const up = await fetch('/api/admin/upload', { method: 'POST', body: fd }).then(async (r) => {
+      if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
       if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
       return r.json();
     });
@@ -215,10 +290,7 @@ function renderMenuItem(item, cats) {
   const uploadBtn = el('button', { text: 'Image…', onclick: () => upload.click() });
 
   const name = el('input', { type: 'text', value: item.name, style: 'flex: 1; min-width: 8rem;' });
-  const price = el('input', {
-    type: 'number', step: '0.01', min: '0',
-    value: item.price, style: 'max-width: 6rem;',
-  });
+  const price = el('input', { type: 'number', step: '0.01', min: '0', value: item.price, style: 'max-width: 6rem;' });
 
   const cat = el('select', {});
   cat.appendChild(el('option', { value: '', text: 'Uncategorized' }));
@@ -280,6 +352,8 @@ $('add-item').onclick = async () => {
   const priceStr = $('new-item-price').value;
   const price = Number(priceStr);
   const catVal = $('new-item-category').value;
+  const fileInput = $('new-item-image');
+  const file = fileInput.files[0];
   $('add-item-error').textContent = '';
 
   if (!name) { $('add-item-error').textContent = 'Name is required.'; return; }
@@ -288,21 +362,60 @@ $('add-item').onclick = async () => {
   }
 
   try {
+    let image_path = null;
+    if (file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const up = await fetch('/api/admin/upload', { method: 'POST', body: fd }).then(async (r) => {
+        if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+        if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
+        return r.json();
+      });
+      image_path = up.path;
+    }
+
     await api('/api/admin/menu-items', {
       method: 'POST',
       body: JSON.stringify({
         name, price,
         category_id: catVal === '' ? null : Number(catVal),
+        image_path,
       }),
     });
     $('new-item-name').value = '';
     $('new-item-price').value = '';
+    fileInput.value = '';
     await refreshMenuItems();
-  } catch (e) { $('add-item-error').textContent = e.message; }
+  } catch (e) {
+    if (e.message !== 'unauthorized') $('add-item-error').textContent = e.message;
+  }
 };
 
 // ---------- Boot ----------
 
-Promise.all([refresh(), refreshCategories(), refreshMenuItems()]).catch(e => {
-  $('status').textContent = 'error loading: ' + e.message;
-});
+$('pin-submit').onclick = login;
+$('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+$('logout-btn').onclick = logout;
+
+async function loadApp() {
+  $('status').textContent = 'loading…';
+  try {
+    await Promise.all([refresh(), refreshCategories(), refreshMenuItems()]);
+  } catch (e) {
+    if (e.message !== 'unauthorized') {
+      $('status').textContent = 'error loading: ' + e.message;
+    }
+  }
+}
+
+async function boot() {
+  const res = await fetch('/api/admin/tables');
+  if (res.ok) {
+    showApp();
+    loadApp();
+  } else {
+    showLogin();
+  }
+}
+
+boot();
