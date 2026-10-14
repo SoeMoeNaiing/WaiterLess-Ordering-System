@@ -100,6 +100,9 @@ function renderCartBar() {
 }
 
 function renderCartPanel() {
+  // If we already showed a confirmation, don't overwrite it
+  if ($('cart-inner').dataset.mode === 'confirmation') return;
+
   const root = $('cart-items');
   root.replaceChildren();
 
@@ -109,8 +112,11 @@ function renderCartPanel() {
       text: 'Cart is empty.',
       style: 'padding: 1rem 0; color:#888;',
     }));
+    $('place-order').disabled = true;
     return;
   }
+
+  $('place-order').disabled = false;
 
   for (const entry of cart) {
     const item = menuByItemId.get(entry.itemId);
@@ -176,6 +182,85 @@ function renderItemWithCart(item) {
   return div;
 }
 
+// ---------- Submit order ----------
+
+async function placeOrder() {
+  const btn = $('place-order');
+  const err = $('cart-error');
+  err.style.display = 'none';
+  err.textContent = '';
+
+  if (cart.length === 0) return;
+
+  const token = getToken();
+  const payload = {
+    token,
+    items: cart.map((e) => ({ itemId: e.itemId, qty: e.qty })),
+  };
+
+  btn.disabled = true;
+  btn.textContent = 'Placing order…';
+
+  try {
+    const res = await fetch('/api/customer/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+
+    showConfirmation(body);
+    cart = [];
+    saveCart(token);
+    renderCartBar();
+    renderMenu();
+  } catch (e) {
+    err.textContent = e.message || 'Could not place order.';
+    err.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Place order';
+  }
+}
+
+function showConfirmation({ order, items }) {
+  const inner = $('cart-inner');
+  inner.dataset.mode = 'confirmation';
+  inner.replaceChildren();
+
+  inner.appendChild(el('div', { className: 'confirmation' }, [
+    el('div', { className: 'big', text: '✓' }),
+    el('h3', { text: `Order #${order.id} placed` }),
+    el('div', {
+      className: 'muted',
+      text: 'Please wait for your food.',
+      style: 'color:#888;',
+    }),
+    el('div', {
+      className: 'total',
+      text: formatPrice(order.total),
+      style: 'margin-top: 1rem;',
+    }),
+    el('div', {
+      className: 'muted',
+      text: `${items.length} item${items.length === 1 ? '' : 's'}`,
+      style: 'margin-top: 0.25rem; color:#888;',
+    }),
+  ]));
+
+  inner.appendChild(el('button', {
+    className: 'close',
+    text: 'Order more',
+    onclick: () => {
+      inner.dataset.mode = '';
+      $('cart-panel').classList.remove('show');
+      // Restore the cart structure
+      location.reload();
+    },
+  }));
+}
+
 // ---------- Boot ----------
 
 async function boot() {
@@ -220,10 +305,13 @@ async function boot() {
   }
 }
 
+// ---------- Wiring ----------
+
 $('cart-bar').onclick = () => $('cart-panel').classList.add('show');
 $('cart-close').onclick = () => $('cart-panel').classList.remove('show');
 $('cart-panel').onclick = (e) => {
   if (e.target === $('cart-panel')) $('cart-panel').classList.remove('show');
 };
+$('place-order').onclick = placeOrder;
 
 boot();

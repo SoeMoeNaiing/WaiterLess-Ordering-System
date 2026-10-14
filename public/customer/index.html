@@ -10,7 +10,7 @@
     body {
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       margin: 0; padding: 0; color: #222; background: #fafafa;
-      padding-bottom: 6rem; /* leave room for the sticky cart bar later */
+      padding-bottom: 6rem;
     }
     header {
       position: sticky; top: 0; z-index: 10;
@@ -28,9 +28,10 @@
     .item {
       display: flex; gap: 0.75rem; padding: 0.75rem;
       background: #fff; border-radius: 8px; margin-bottom: 0.5rem;
-      border: 1px solid #eee;
+      border: 1px solid #eee; cursor: pointer; transition: background 0.1s;
     }
-    .item.sold-out { opacity: 0.55; }
+    .item:active { background: #f0f4ff; }
+    .item.sold-out { opacity: 0.55; cursor: not-allowed; }
     .item img {
       width: 72px; height: 72px; object-fit: cover; border-radius: 6px;
       background: #f0f0f0; flex-shrink: 0;
@@ -46,6 +47,59 @@
       background: #fbeaec; color: #721c24; border-radius: 8px; text-align: center;
     }
     .loading { text-align: center; padding: 3rem 1rem; color: #888; }
+    .qty-badge {
+      display: inline-block; min-width: 1.5rem; padding: 0.05rem 0.4rem;
+      background: #0a58ca; color: #fff; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 600; margin-left: 0.5rem;
+      text-align: center;
+    }
+    .cart-bar {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: #0a58ca; color: #fff;
+      padding: 0.9rem 1rem; display: flex; align-items: center; gap: 1rem;
+      font-weight: 600; cursor: pointer; box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+      transform: translateY(100%); transition: transform 0.2s;
+    }
+    .cart-bar.show { transform: translateY(0); }
+    .cart-bar .count { background: rgba(255,255,255,0.2); padding: 0.15rem 0.5rem; border-radius: 999px; }
+    .cart-bar .total { margin-left: auto; }
+    .cart-panel {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      display: none; align-items: flex-end; z-index: 100;
+    }
+    .cart-panel.show { display: flex; }
+    .cart-panel .inner {
+      background: #fff; width: 100%; max-width: 640px; margin: 0 auto;
+      max-height: 80vh; overflow-y: auto; border-radius: 12px 12px 0 0;
+      padding: 1rem;
+    }
+    .cart-panel h2 { margin: 0 0 1rem; font-size: 1.1rem; color: #222; text-transform: none; letter-spacing: 0; }
+    .cart-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid #eee; }
+    .cart-row .name { flex: 1; }
+    .cart-row .qty-controls { display: flex; align-items: center; gap: 0.4rem; }
+    .cart-row button {
+      font: inherit; padding: 0.2rem 0.6rem; border: 1px solid #ccc; border-radius: 6px;
+      background: #fff; cursor: pointer; min-width: 2rem;
+    }
+    .place-order {
+      width: 100%; margin-top: 1rem; padding: 0.9rem;
+      background: #198754; color: #fff; border: none; border-radius: 8px;
+      font-weight: 600; font-size: 1rem; cursor: pointer;
+    }
+    .place-order:disabled { opacity: 0.6; cursor: not-allowed; }
+    .cart-error {
+      margin-top: 0.75rem; padding: 0.6rem; border-radius: 6px;
+      background: #fbeaec; color: #721c24; font-size: 0.9rem;
+    }
+    .confirmation { text-align: center; padding: 1rem 0; }
+    .confirmation .big { font-size: 2rem; margin-bottom: 0.5rem; }
+    .confirmation h3 { margin: 0 0 0.5rem; }
+    .confirmation .total { font-size: 1.4rem; font-weight: 700; color: #198754; }
+    .cart-panel .close {
+      width: 100%; margin-top: 0.5rem; padding: 0.9rem;
+      background: #eee; color: #333; border: none; border-radius: 8px;
+      font-weight: 600; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -56,6 +110,22 @@
   <main id="root">
     <div class="loading">loading menu…</div>
   </main>
+
+  <div id="cart-bar" class="cart-bar">
+    <span class="count" id="cart-count">0</span>
+    <span>View cart</span>
+    <span class="total" id="cart-total"></span>
+  </div>
+
+  <div id="cart-panel" class="cart-panel">
+    <div class="inner" id="cart-inner">
+      <h2 id="cart-title">Your cart</h2>
+      <div id="cart-items"></div>
+      <div id="cart-error" class="cart-error" style="display:none;"></div>
+      <button class="place-order" id="place-order">Place order</button>
+      <button class="close" id="cart-close">Close</button>
+    </div>
+  </div>
 
   <script src="/customer/menu.js"></script>
 </body>
