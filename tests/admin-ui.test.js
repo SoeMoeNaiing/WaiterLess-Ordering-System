@@ -31,3 +31,17 @@ test('GET /admin/app.js references categories endpoint', async () => {
   assert.equal(res.status, 200);
   assert.match(res.text, /\/api\/admin\/categories/);
 });
+
+test('GET /admin/app.js references menu-items endpoint', async () => {
+  const app = createApp();
+  const res = await request(app).get('/admin/app.js');
+  assert.equal(res.status, 200);
+  assert.match(res.text, /\/api\/admin\/menu-items/);
+});
+
+test('GET /admin/placeholder.svg returns SVG', async () => {
+  const app = createApp();
+  const res = await request(app).get('/admin/placeholder.svg');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /svg/);
+});
