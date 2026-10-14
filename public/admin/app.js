@@ -157,7 +157,7 @@ $('add-table').onclick = async () => {
     $('new-table-label').value = '';
     await refresh();
   } catch (e) {
-    $('add-error').textContent = e.message;
+    if (e.message !== 'unauthorized') $('add-error').textContent = e.message;
   }
 };
 
@@ -229,7 +229,7 @@ $('add-category').onclick = async () => {
     $('new-category-order').value = '0';
     await refreshCategories();
   } catch (e) {
-    $('add-category-error').textContent = e.message;
+    if (e.message !== 'unauthorized') $('add-category-error').textContent = e.message;
   }
 };
 
@@ -391,11 +391,44 @@ $('add-item').onclick = async () => {
   }
 };
 
+// ---------- Security ----------
+
+async function changePin(target) {
+  const current_pin = $('current-pin').value.trim();
+  const new_pin = target === 'admin'
+    ? $('new-admin-pin').value.trim()
+    : $('new-kitchen-pin').value.trim();
+  const msg = $('security-message');
+  msg.textContent = '';
+  msg.style.color = '#888';
+
+  try {
+    await api('/api/admin/auth/change-pin', {
+      method: 'POST',
+      body: JSON.stringify({ current_pin, target, new_pin }),
+    });
+    $('current-pin').value = '';
+    $('new-admin-pin').value = '';
+    $('new-kitchen-pin').value = '';
+    msg.textContent = `${target} PIN changed.`;
+    msg.style.color = '#155724';
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    msg.textContent = e.message;
+    msg.style.color = '#b02a37';
+  }
+}
+
 // ---------- Boot ----------
 
 $('pin-submit').onclick = login;
 $('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
 $('logout-btn').onclick = logout;
+
+const btnAdminPin = $('change-admin-pin');
+if (btnAdminPin) btnAdminPin.onclick = () => changePin('admin');
+const btnKitchenPin = $('change-kitchen-pin');
+if (btnKitchenPin) btnKitchenPin.onclick = () => changePin('kitchen');
 
 async function loadApp() {
   $('status').textContent = 'loading…';

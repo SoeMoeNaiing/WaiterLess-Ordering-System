@@ -120,6 +120,26 @@
       <h2>Tables</h2>
       <div id="tables"><p class="muted">loading…</p></div>
     </div>
+        <div class="card">
+      <h2>Security</h2>
+      <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
+
+      <div class="form-row" style="margin-top: 0.75rem;">
+        <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
+      </div>
+
+      <div class="form-row">
+        <input id="new-admin-pin" type="password" inputmode="numeric" placeholder="New admin PIN (4-12 digits)" />
+        <button id="change-admin-pin" class="primary">Change admin PIN</button>
+      </div>
+
+      <div class="form-row">
+        <input id="new-kitchen-pin" type="password" inputmode="numeric" placeholder="New kitchen PIN (4-12 digits)" />
+        <button id="change-kitchen-pin" class="primary">Change kitchen PIN</button>
+      </div>
+
+      <p id="security-message" class="muted" style="min-height: 1.2rem;"></p>
+    </div>
   </section>
 
   <script src="/admin/app.js"></script>
