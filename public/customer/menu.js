@@ -1,7 +1,6 @@
 const $ = (id) => document.getElementById(id);
 
 function getToken() {
-  // URL is /t/<token>
   const m = window.location.pathname.match(/^\/t\/([^/?#]+)/);
   return m ? m[1] : null;
 }
@@ -12,6 +11,7 @@ function el(tag, attrs = {}, children = []) {
     if (k === 'text') node.textContent = v;
     else if (k === 'className') node.className = v;
     else if (k === 'onerror') node.onerror = v;
+    else if (k === 'onclick') node.onclick = v;
     else node[k] = v;
   }
   for (const c of [].concat(children)) {
@@ -21,7 +21,135 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-function renderItem(item) {
+function formatPrice(n) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
+}
+
+// ---------- State ----------
+
+let currentMenu = null;
+let menuByItemId = new Map();
+let cart = [];
+
+// ---------- Cart ----------
+
+function cartKey(token) { return `cart:${token}`; }
+
+function loadCart(token) {
+  try {
+    const raw = localStorage.getItem(cartKey(token));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((e) => e && Number.isInteger(e.itemId) && e.qty > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCart(token) {
+  localStorage.setItem(cartKey(token), JSON.stringify(cart));
+}
+
+function addToCart(itemId) {
+  const existing = cart.find((e) => e.itemId === itemId);
+  if (existing) existing.qty += 1;
+  else cart.push({ itemId, qty: 1 });
+  saveCart(getToken());
+  renderMenu();
+  renderCartBar();
+  renderCartPanel();
+}
+
+function setQty(itemId, qty) {
+  if (qty <= 0) cart = cart.filter((e) => e.itemId !== itemId);
+  else {
+    const e = cart.find((x) => x.itemId === itemId);
+    if (e) e.qty = qty;
+  }
+  saveCart(getToken());
+  renderMenu();
+  renderCartBar();
+  renderCartPanel();
+}
+
+function cartCount() {
+  return cart.reduce((s, e) => s + e.qty, 0);
+}
+
+function cartTotal() {
+  let total = 0;
+  for (const e of cart) {
+    const item = menuByItemId.get(e.itemId);
+    if (item) total += item.price * e.qty;
+  }
+  return total;
+}
+
+function renderCartBar() {
+  const bar = $('cart-bar');
+  const count = cartCount();
+  if (count === 0) {
+    bar.classList.remove('show');
+    return;
+  }
+  $('cart-count').textContent = String(count);
+  $('cart-total').textContent = formatPrice(cartTotal());
+  bar.classList.add('show');
+}
+
+function renderCartPanel() {
+  const root = $('cart-items');
+  root.replaceChildren();
+
+  if (cart.length === 0) {
+    root.appendChild(el('div', {
+      className: 'muted',
+      text: 'Cart is empty.',
+      style: 'padding: 1rem 0; color:#888;',
+    }));
+    return;
+  }
+
+  for (const entry of cart) {
+    const item = menuByItemId.get(entry.itemId);
+    if (!item) continue;
+
+    const dec = el('button', { text: '−', onclick: () => setQty(entry.itemId, entry.qty - 1) });
+    const inc = el('button', { text: '+', onclick: () => setQty(entry.itemId, entry.qty + 1) });
+    const qty = el('span', { text: String(entry.qty), style: 'min-width: 1.5rem; text-align:center;' });
+
+    root.appendChild(el('div', { className: 'cart-row' }, [
+      el('span', { className: 'name', text: `${item.name} — ${formatPrice(item.price)}` }),
+      el('span', { className: 'qty-controls' }, [dec, qty, inc]),
+    ]));
+  }
+}
+
+// ---------- Menu rendering ----------
+
+function renderMenu() {
+  const root = $('root');
+  root.replaceChildren();
+
+  if (!currentMenu || currentMenu.length === 0) {
+    root.appendChild(el('div', {
+      className: 'empty',
+      text: 'This menu is empty. Please ask a staff member.',
+    }));
+    return;
+  }
+
+  for (const cat of currentMenu) {
+    root.appendChild(el('h2', { text: cat.name }));
+    for (const item of cat.items) {
+      root.appendChild(renderItemWithCart(item));
+    }
+  }
+}
+
+function renderItemWithCart(item) {
   const soldOut = item.is_available === 0;
 
   const img = el('img', {
@@ -31,42 +159,24 @@ function renderItem(item) {
   });
 
   const price = el('span', { className: 'price', text: formatPrice(item.price) });
-  if (soldOut) {
-    price.appendChild(el('span', { className: 'sold', text: 'sold out' }));
-  }
+  if (soldOut) price.appendChild(el('span', { className: 'sold', text: 'sold out' }));
+
+  const nameRow = el('div', { className: 'name' }, [item.name]);
+  const inCart = cart.find((e) => e.itemId === item.id);
+  if (inCart) nameRow.appendChild(el('span', { className: 'qty-badge', text: `×${inCart.qty}` }));
 
   const info = el('div', { className: 'info' }, [
-    el('div', { className: 'name', text: item.name }),
+    nameRow,
     item.description ? el('div', { className: 'desc', text: item.description }) : null,
     price,
   ]);
 
-  return el('div', { className: `item${soldOut ? ' sold-out' : ''}` }, [img, info]);
+  const div = el('div', { className: `item${soldOut ? ' sold-out' : ''}` }, [img, info]);
+  if (!soldOut) div.onclick = () => addToCart(item.id);
+  return div;
 }
 
-function formatPrice(n) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
-}
-
-function render(categories) {
-  const root = $('root');
-  root.replaceChildren();
-
-  if (categories.length === 0) {
-    root.appendChild(el('div', {
-      className: 'empty',
-      text: 'This menu is empty. Please ask a staff member.',
-    }));
-    return;
-  }
-
-  for (const cat of categories) {
-    root.appendChild(el('h2', { text: cat.name }));
-    for (const item of cat.items) {
-      root.appendChild(renderItem(item));
-    }
-  }
-}
+// ---------- Boot ----------
 
 async function boot() {
   const token = getToken();
@@ -75,6 +185,8 @@ async function boot() {
     $('root').appendChild(el('div', { className: 'error', text: 'Invalid URL.' }));
     return;
   }
+
+  cart = loadCart(token);
 
   try {
     const res = await fetch(`/api/customer/menu?token=${encodeURIComponent(token)}`);
@@ -89,11 +201,29 @@ async function boot() {
 
     const data = await res.json();
     $('table-label').textContent = `Table ${data.table.table_number}`;
-    render(data.categories);
+
+    menuByItemId = new Map();
+    for (const cat of data.categories) {
+      for (const it of cat.items) menuByItemId.set(it.id, it);
+    }
+
+    cart = cart.filter((e) => menuByItemId.has(e.itemId));
+    saveCart(token);
+
+    currentMenu = data.categories;
+    renderMenu();
+    renderCartBar();
+    renderCartPanel();
   } catch (e) {
     $('root').innerHTML = '';
     $('root').appendChild(el('div', { className: 'error', text: 'Network error: ' + e.message }));
   }
 }
+
+$('cart-bar').onclick = () => $('cart-panel').classList.add('show');
+$('cart-close').onclick = () => $('cart-panel').classList.remove('show');
+$('cart-panel').onclick = (e) => {
+  if (e.target === $('cart-panel')) $('cart-panel').classList.remove('show');
+};
 
 boot();
