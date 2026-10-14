@@ -54,7 +54,6 @@ export function adminTablesRouter({ db }) {
   });
 
   // PUT /api/admin/tables/:id
-  // Partial update. Accepts any subset of { table_number, label, is_active }.
   router.put('/:id', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -114,8 +113,7 @@ export function adminTablesRouter({ db }) {
     res.json(updated);
   });
 
-  // DELETE /api/admin/tables/:id
-  // SOFT delete: sets is_active = 0. Idempotent.
+  // DELETE /api/admin/tables/:id — SOFT delete (is_active = 0)
   router.delete('/:id', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -132,5 +130,24 @@ export function adminTablesRouter({ db }) {
     res.json(updated);
   });
 
-  return router;
+  // POST /api/admin/tables/:id/regenerate-token
+  router.post('/:id/regenerate-token', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'invalid id' });
+    }
+
+    const existing = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'table not found' });
+    }
+
+    const newToken = newTableToken();
+    db.prepare('UPDATE tables SET qr_token = ? WHERE id = ?').run(newToken, id);
+
+    const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
+    res.json(updated);
+  });
+
+  return router;   // ← MUST be the last line inside the function
 }

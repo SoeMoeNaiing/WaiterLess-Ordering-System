@@ -344,3 +344,75 @@ test('DELETE twice is idempotent (second call still 200, is_active = 0)', async 
   assert.equal(second.body.is_active, 0);
   db.close();
 });
+
+// ---------- POST /api/admin/tables/:id/regenerate-token ----------
+
+test('regenerate-token returns a new token and invalidates the old one', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const oldToken = created.body.qr_token;
+
+  const res = await request(app)
+    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+    .send();
+
+  assert.equal(res.status, 200);
+  assert.notEqual(res.body.qr_token, oldToken);
+  assert.equal(res.body.qr_token.length, 12);
+
+  // Old token is nowhere in the DB
+  const stale = db.prepare('SELECT id FROM tables WHERE qr_token = ?').get(oldToken);
+  assert.equal(stale, undefined, 'old token should no longer exist');
+  db.close();
+});
+
+test('regenerate-token preserves other fields', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app)
+    .post('/api/admin/tables')
+    .send({ table_number: 'T1', label: 'Window' });
+
+  const res = await request(app)
+    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+    .send();
+
+  assert.equal(res.body.table_number, 'T1');
+  assert.equal(res.body.label, 'Window');
+  assert.equal(res.body.is_active, 1);
+  assert.equal(res.body.id, created.body.id);
+  db.close();
+});
+
+test('regenerate-token twice gives two distinct tokens', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const first = await request(app)
+    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+    .send();
+  const second = await request(app)
+    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+    .send();
+
+  assert.notEqual(first.body.qr_token, second.body.qr_token);
+  assert.notEqual(first.body.qr_token, created.body.qr_token);
+  db.close();
+});
+
+test('regenerate-token on unknown id returns 404', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app)
+    .post('/api/admin/tables/9999/regenerate-token')
+    .send();
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('regenerate-token on invalid id returns 400', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app)
+    .post('/api/admin/tables/abc/regenerate-token')
+    .send();
+  assert.equal(res.status, 400);
+  db.close();
+});
