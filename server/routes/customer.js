@@ -14,6 +14,48 @@ function findTableByToken(db, token) {
   return { table };
 }
 
+function validateItems(db, items) {
+  // Returns { ok: true, resolved: [{ itemId, qty, name, price }] }
+  // or { ok: false, status, error }
+  if (!Array.isArray(items) || items.length === 0) {
+    return { ok: false, status: 400, error: 'items must be a non-empty array' };
+  }
+
+  const resolved = [];
+  for (const entry of items) {
+    if (!entry || typeof entry !== 'object') {
+      return { ok: false, status: 400, error: 'each item must be an object' };
+    }
+    const { itemId, qty } = entry;
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return { ok: false, status: 400, error: 'itemId must be a positive integer' };
+    }
+    if (!Number.isInteger(qty) || qty <= 0 || qty > 99) {
+      return { ok: false, status: 400, error: 'qty must be between 1 and 99' };
+    }
+
+    const row = db
+      .prepare(
+        `SELECT mi.id, mi.name, mi.price, mi.is_active, mi.is_available,
+                mi.category_id, c.is_active AS cat_active
+           FROM menu_items mi
+           LEFT JOIN categories c ON c.id = mi.category_id
+          WHERE mi.id = ?`
+      )
+      .get(itemId);
+
+    if (!row) return { ok: false, status: 400, error: `item ${itemId} not found` };
+    if (!row.is_active) return { ok: false, status: 400, error: `item ${itemId} is not available` };
+    if (row.category_id != null && !row.cat_active) {
+      return { ok: false, status: 400, error: `item ${itemId} is not available` };
+    }
+    if (!row.is_available) return { ok: false, status: 400, error: `item ${itemId} is sold out` };
+
+    resolved.push({ itemId: row.id, qty, name: row.name, price: row.price });
+  }
+  return { ok: true, resolved };
+}
+
 export function customerRouter({ db }) {
   const router = Router();
 
@@ -37,7 +79,7 @@ export function customerRouter({ db }) {
       'SELECT id, name FROM categories WHERE is_active = 1 ORDER BY sort_order, name'
     ).all();
 
-       const items = db.prepare(
+    const items = db.prepare(
       `SELECT id, category_id, name, description, price, image_path, is_available
          FROM menu_items
         WHERE is_active = 1
@@ -68,6 +110,59 @@ export function customerRouter({ db }) {
       table: { id: table.id, table_number: table.table_number, label: table.label },
       categories: result,
     });
+  });
+
+  // POST /api/customer/orders — place an order
+  router.post('/api/customer/orders', (req, res) => {
+    const { token, items, notes } = req.body ?? {};
+
+    const { table, error } = findTableByToken(db, token);
+    if (error === 'notfound') return res.status(404).json({ error: 'table not found' });
+    if (error === 'inactive') return res.status(410).json({ error: 'table inactive' });
+    if (error) return res.status(400).json({ error: 'token is required' });
+
+    const checked = validateItems(db, items);
+    if (!checked.ok) return res.status(checked.status).json({ error: checked.error });
+
+    const { resolved } = checked;
+    const total = resolved.reduce((sum, r) => sum + r.price * r.qty, 0);
+
+    const cleanNotes = typeof notes === 'string' && notes.trim() !== ''
+      ? notes.trim().slice(0, 500)
+      : null;
+
+    let orderId;
+    try {
+      const insert = db.transaction(() => {
+        const orderResult = db.prepare(
+          'INSERT INTO orders (table_id, total, notes) VALUES (?, ?, ?)'
+        ).run(table.id, total, cleanNotes);
+
+        const oid = orderResult.lastInsertRowid;
+
+        const insertItem = db.prepare(
+          `INSERT INTO order_items
+             (order_id, menu_item_id, name_snapshot, price_snapshot, qty)
+           VALUES (?, ?, ?, ?, ?)`
+        );
+        for (const r of resolved) {
+          insertItem.run(oid, r.itemId, r.name, r.price, r.qty);
+        }
+        return oid;
+      });
+
+      orderId = insert();
+    } catch (err) {
+      console.error('[customer.orders] insert error:', err);
+      return res.status(500).json({ error: 'could not create order' });
+    }
+
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    const orderItems = db
+      .prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id')
+      .all(orderId);
+
+    res.status(201).json({ order, items: orderItems });
   });
 
   return router;

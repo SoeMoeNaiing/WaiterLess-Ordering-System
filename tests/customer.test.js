@@ -189,3 +189,172 @@ test('GET /t/:token serves the customer menu script', async () => {
   assert.match(res.headers['content-type'], /javascript/);
   db.close();
 });
+
+// ---------- POST /api/customer/orders ----------
+
+async function seedMenuItem(app, { name = 'X', price = 4.5, category = true } = {}) {
+  let category_id = null;
+  if (category) {
+    const cat = await request(app).post('/api/admin/categories').send({ name: `C-${name}-${Math.random()}` });
+    category_id = cat.body.id;
+  }
+  const item = await request(app).post('/api/admin/menu-items').send({ name, price, category_id });
+  return item.body;
+}
+
+test('POST /api/customer/orders creates an order with items', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'Spring Rolls', price: 4.5 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 2 }],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.order.table_id, t.id);
+  assert.equal(res.body.order.status, 'placed');
+  assert.equal(res.body.order.total, 9.0);
+  assert.equal(res.body.items.length, 1);
+  assert.equal(res.body.items[0].name_snapshot, 'Spring Rolls');
+  assert.equal(res.body.items[0].price_snapshot, 4.5);
+  assert.equal(res.body.items[0].qty, 2);
+  db.close();
+});
+
+test('POST uses current DB price, ignores client price', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'X', price: 10 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1, price: 0.01 }],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.order.total, 10);
+  assert.equal(res.body.items[0].price_snapshot, 10);
+  db.close();
+});
+
+test('POST with unknown token returns 404', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).post('/api/customer/orders').send({
+    token: 'bogus',
+    items: [{ itemId: 1, qty: 1 }],
+  });
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('POST with inactive table returns 410', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app, { table_number: 'T1', is_active: 0 });
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: 1, qty: 1 }],
+  });
+  assert.equal(res.status, 410);
+  db.close();
+});
+
+test('POST with empty items returns 400', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [],
+  });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('POST with unknown itemId returns 400', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: 9999, qty: 1 }],
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /not found/);
+  db.close();
+});
+
+test('POST with sold-out item returns 400', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'Sold', price: 1 });
+  await request(app).put(`/api/admin/menu-items/${item.id}`).send({ is_available: 0 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1 }],
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /sold out/);
+  db.close();
+});
+
+test('POST with inactive category returns 400', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const cat = await request(app).post('/api/admin/categories').send({ name: 'Hidden' });
+  const item = await request(app).post('/api/admin/menu-items').send({
+    name: 'X', price: 1, category_id: cat.body.id,
+  });
+  await request(app).put(`/api/admin/categories/${cat.body.id}`).send({ is_active: 0 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.body.id, qty: 1 }],
+  });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('POST with qty=0 returns 400', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'X', price: 1 });
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 0 }],
+  });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('POST with qty>99 returns 400', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'X', price: 1 });
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 100 }],
+  });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('POST with multiple items sums the total', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const a = await seedMenuItem(app, { name: 'A', price: 4.5 });
+  const b = await seedMenuItem(app, { name: 'B', price: 6.0 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [
+      { itemId: a.id, qty: 2 },
+      { itemId: b.id, qty: 1 },
+    ],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.order.total, 15.0); // 4.5*2 + 6.0
+  assert.equal(res.body.items.length, 2);
+  db.close();
+});
