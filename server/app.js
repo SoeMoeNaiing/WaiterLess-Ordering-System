@@ -14,8 +14,8 @@ export function createApp({ db } = {}) {
   app.use(express.json());
   app.use(lanOnly(LAN_PREFIX));
 
-  // Static assets: uploaded images
   app.use('/uploads', express.static('uploads'));
+  app.use('/admin', express.static('public/admin'));
 
   app.get('/health', (req, res) => {
     if (db) {
