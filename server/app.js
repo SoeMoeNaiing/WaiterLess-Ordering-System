@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { lanOnly } from './middleware/lanOnly.js';
 import { adminTablesRouter } from './routes/admin.tables.js';
+import { adminCategoriesRouter } from './routes/admin.categories.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
@@ -31,6 +32,7 @@ export function createApp({ db } = {}) {
 
   if (db) {
     app.use('/api/admin/tables', adminTablesRouter({ db }));
+    app.use('/api/admin/categories', adminCategoriesRouter({ db }));
   }
 
   return app;
