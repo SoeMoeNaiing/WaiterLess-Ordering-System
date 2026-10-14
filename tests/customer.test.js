@@ -439,3 +439,21 @@ test('order status 410 for inactive table', async () => {
   assert.equal(res.status, 410);
   db.close();
 });
+
+test('GET /t/:token/order/:id serves the status page HTML', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const res = await request(app).get(`/t/${t.qr_token}/order/1`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /^text\/html/);
+  assert.match(res.text, /Order status/);
+  db.close();
+});
+
+test('GET /customer/status.js is served', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/customer/status.js');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /javascript/);
+  db.close();
+});

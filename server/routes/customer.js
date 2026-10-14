@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CUSTOMER_HTML = join(__dirname, '..', '..', 'public', 'customer', 'index.html');
+const PUBLIC_DIR = join(__dirname, '..', '..', 'public', 'customer');
 
 function findTableByToken(db, token) {
   if (typeof token !== 'string' || token === '') return { error: 'missing' };
@@ -18,7 +18,6 @@ function validateItems(db, items) {
   if (!Array.isArray(items) || items.length === 0) {
     return { ok: false, status: 400, error: 'items must be a non-empty array' };
   }
-
   const resolved = [];
   for (const entry of items) {
     if (!entry || typeof entry !== 'object') {
@@ -31,24 +30,19 @@ function validateItems(db, items) {
     if (!Number.isInteger(qty) || qty <= 0 || qty > 99) {
       return { ok: false, status: 400, error: 'qty must be between 1 and 99' };
     }
-
-    const row = db
-      .prepare(
-        `SELECT mi.id, mi.name, mi.price, mi.is_active, mi.is_available,
-                mi.category_id, c.is_active AS cat_active
-           FROM menu_items mi
-           LEFT JOIN categories c ON c.id = mi.category_id
-          WHERE mi.id = ?`
-      )
-      .get(itemId);
-
+    const row = db.prepare(
+      `SELECT mi.id, mi.name, mi.price, mi.is_active, mi.is_available,
+              mi.category_id, c.is_active AS cat_active
+         FROM menu_items mi
+         LEFT JOIN categories c ON c.id = mi.category_id
+        WHERE mi.id = ?`
+    ).get(itemId);
     if (!row) return { ok: false, status: 400, error: `item ${itemId} not found` };
     if (!row.is_active) return { ok: false, status: 400, error: `item ${itemId} is not available` };
     if (row.category_id != null && !row.cat_active) {
       return { ok: false, status: 400, error: `item ${itemId} is not available` };
     }
     if (!row.is_available) return { ok: false, status: 400, error: `item ${itemId} is sold out` };
-
     resolved.push({ itemId: row.id, qty, name: row.name, price: row.price });
   }
   return { ok: true, resolved };
@@ -57,13 +51,22 @@ function validateItems(db, items) {
 export function customerRouter({ db }) {
   const router = Router();
 
-  // GET /t/:token — customer HTML page
-  router.get('/t/:token', (req, res) => {
-    const { table, error } = findTableByToken(db, req.params.token);
+  // GET /t/:token/order/:id — status page
+  router.get('/t/:token/order/:id', (req, res) => {
+    const { error } = findTableByToken(db, req.params.token);
     if (error === 'notfound') return res.status(404).send('Table not found');
     if (error === 'inactive') return res.status(410).send('This table is no longer active');
     if (error) return res.status(400).send('Missing token');
-    res.type('html').send(readFileSync(CUSTOMER_HTML, 'utf8'));
+    res.type('html').send(readFileSync(join(PUBLIC_DIR, 'status.html'), 'utf8'));
+  });
+
+  // GET /t/:token — menu page
+  router.get('/t/:token', (req, res) => {
+    const { error } = findTableByToken(db, req.params.token);
+    if (error === 'notfound') return res.status(404).send('Table not found');
+    if (error === 'inactive') return res.status(410).send('This table is no longer active');
+    if (error) return res.status(400).send('Missing token');
+    res.type('html').send(readFileSync(join(PUBLIC_DIR, 'index.html'), 'utf8'));
   });
 
   // GET /api/customer/menu?token=...
@@ -110,7 +113,7 @@ export function customerRouter({ db }) {
     });
   });
 
-  // POST /api/customer/orders — place an order
+  // POST /api/customer/orders
   router.post('/api/customer/orders', (req, res) => {
     const { token, items, notes } = req.body ?? {};
 
@@ -124,7 +127,6 @@ export function customerRouter({ db }) {
 
     const { resolved } = checked;
     const total = resolved.reduce((sum, r) => sum + r.price * r.qty, 0);
-
     const cleanNotes = typeof notes === 'string' && notes.trim() !== ''
       ? notes.trim().slice(0, 500)
       : null;
@@ -135,7 +137,6 @@ export function customerRouter({ db }) {
         const orderResult = db.prepare(
           'INSERT INTO orders (table_id, total, notes) VALUES (?, ?, ?)'
         ).run(table.id, total, cleanNotes);
-
         const oid = orderResult.lastInsertRowid;
 
         const insertItem = db.prepare(
@@ -148,7 +149,6 @@ export function customerRouter({ db }) {
         }
         return oid;
       });
-
       orderId = insert();
     } catch (err) {
       console.error('[customer.orders] insert error:', err);
@@ -163,7 +163,7 @@ export function customerRouter({ db }) {
     res.status(201).json({ order, items: orderItems });
   });
 
-  // GET /api/customer/orders/:id?token=... — single order status
+  // GET /api/customer/orders/:id?token=...
   router.get('/api/customer/orders/:id', (req, res) => {
     const orderId = Number(req.params.id);
     if (!Number.isInteger(orderId) || orderId <= 0) {
