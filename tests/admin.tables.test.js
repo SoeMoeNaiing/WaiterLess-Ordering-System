@@ -3,17 +3,20 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../server/app.js';
 import { createDb } from '../server/db.js';
+import { loginAdmin } from './helpers/auth.js';
 
-function appWithDb() {
+async function appWithDb() {
   const db = createDb(':memory:', { quiet: true });
-  return { app: createApp({ db }), db };
+  const app = createApp({ db });
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+  return { app, agent, db };
 }
 
 test('POST /api/admin/tables creates a table with a token', async () => {
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const res = await request(app)
-    .post('/api/admin/tables')
+  const res = await agent.post('/api/admin/tables')
     .send({ table_number: 'T1', label: 'Window seat' });
 
   assert.equal(res.status, 201);
@@ -27,10 +30,9 @@ test('POST /api/admin/tables creates a table with a token', async () => {
 });
 
 test('POST with label omitted stores label as null', async () => {
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const res = await request(app)
-    .post('/api/admin/tables')
+  const res = await agent.post('/api/admin/tables')
     .send({ table_number: 'T2' });
 
   assert.equal(res.status, 201);
@@ -39,10 +41,9 @@ test('POST with label omitted stores label as null', async () => {
 });
 
 test('POST without table_number returns 400', async () => {
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const res = await request(app)
-    .post('/api/admin/tables')
+  const res = await agent.post('/api/admin/tables')
     .send({ label: 'No number' });
 
   assert.equal(res.status, 400);
@@ -51,10 +52,9 @@ test('POST without table_number returns 400', async () => {
 });
 
 test('POST with empty/whitespace table_number returns 400', async () => {
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const res = await request(app)
-    .post('/api/admin/tables')
+  const res = await agent.post('/api/admin/tables')
     .send({ table_number: '   ' });
 
   assert.equal(res.status, 400);
@@ -62,15 +62,13 @@ test('POST with empty/whitespace table_number returns 400', async () => {
 });
 
 test('POST with duplicate table_number returns 409', async () => {
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const first = await request(app)
-    .post('/api/admin/tables')
+  const first = await agent.post('/api/admin/tables')
     .send({ table_number: 'T1' });
   assert.equal(first.status, 201);
 
-  const second = await request(app)
-    .post('/api/admin/tables')
+  const second = await agent.post('/api/admin/tables')
     .send({ table_number: 'T1' });
   assert.equal(second.status, 409);
   assert.match(second.body.error, /already exists/);
@@ -78,20 +76,19 @@ test('POST with duplicate table_number returns 409', async () => {
 });
 
 test('two tables get different tokens', async () => {
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const a = await request(app).post('/api/admin/tables').send({ table_number: 'A' });
-  const b = await request(app).post('/api/admin/tables').send({ table_number: 'B' });
+  const a = await agent.post('/api/admin/tables').send({ table_number: 'A' });
+  const b = await agent.post('/api/admin/tables').send({ table_number: 'B' });
 
   assert.notEqual(a.body.qr_token, b.body.qr_token);
   db.close();
 });
 
 test('table_number is trimmed before saving', async () => {
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const res = await request(app)
-    .post('/api/admin/tables')
+  const res = await agent.post('/api/admin/tables')
     .send({ table_number: '  T9  ' });
 
   assert.equal(res.status, 201);
@@ -103,20 +100,20 @@ test('table_number is trimmed before saving', async () => {
 // ---------- GET /api/admin/tables ----------
 
 test('GET /api/admin/tables returns an empty array initially', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).get('/api/admin/tables');
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.get('/api/admin/tables');
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, []);
   db.close();
 });
 
 test('GET /api/admin/tables returns all tables ordered by table_number', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T3' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T3' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
 
-  const res = await request(app).get('/api/admin/tables');
+  const res = await agent.get('/api/admin/tables');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 3);
   assert.deepEqual(res.body.map((t) => t.table_number), ['T1', 'T2', 'T3']);
@@ -124,14 +121,14 @@ test('GET /api/admin/tables returns all tables ordered by table_number', async (
 });
 
 test('GET /api/admin/tables?active=1 returns only active tables', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
 
   // Deactivate T2 directly via the DB (no HTTP endpoint for this yet)
   db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
 
-  const res = await request(app).get('/api/admin/tables?active=1');
+  const res = await agent.get('/api/admin/tables?active=1');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].table_number, 'T1');
@@ -139,12 +136,12 @@ test('GET /api/admin/tables?active=1 returns only active tables', async () => {
 });
 
 test('GET /api/admin/tables?active=0 returns only inactive tables', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
   db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
 
-  const res = await request(app).get('/api/admin/tables?active=0');
+  const res = await agent.get('/api/admin/tables?active=0');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].table_number, 'T2');
@@ -152,12 +149,12 @@ test('GET /api/admin/tables?active=0 returns only inactive tables', async () => 
 });
 
 test('GET /api/admin/tables?active=bogus ignores the filter', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
   db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
 
-  const res = await request(app).get('/api/admin/tables?active=bogus');
+  const res = await agent.get('/api/admin/tables?active=bogus');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 2);
   db.close();
@@ -165,20 +162,20 @@ test('GET /api/admin/tables?active=bogus ignores the filter', async () => {
 // ---------- GET /api/admin/tables ----------
 
 test('GET /api/admin/tables returns an empty array initially', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).get('/api/admin/tables');
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.get('/api/admin/tables');
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, []);
   db.close();
 });
 
 test('GET /api/admin/tables returns all tables ordered by table_number', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T3' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T3' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
 
-  const res = await request(app).get('/api/admin/tables');
+  const res = await agent.get('/api/admin/tables');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 3);
   assert.deepEqual(res.body.map((t) => t.table_number), ['T1', 'T2', 'T3']);
@@ -186,13 +183,13 @@ test('GET /api/admin/tables returns all tables ordered by table_number', async (
 });
 
 test('GET /api/admin/tables?active=1 returns only active tables', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
 
   db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
 
-  const res = await request(app).get('/api/admin/tables?active=1');
+  const res = await agent.get('/api/admin/tables?active=1');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].table_number, 'T1');
@@ -200,12 +197,12 @@ test('GET /api/admin/tables?active=1 returns only active tables', async () => {
 });
 
 test('GET /api/admin/tables?active=0 returns only inactive tables', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
   db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
 
-  const res = await request(app).get('/api/admin/tables?active=0');
+  const res = await agent.get('/api/admin/tables?active=0');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].table_number, 'T2');
@@ -213,12 +210,12 @@ test('GET /api/admin/tables?active=0 returns only inactive tables', async () => 
 });
 
 test('GET /api/admin/tables?active=bogus ignores the filter', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  await agent.post('/api/admin/tables').send({ table_number: 'T2' });
   db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
 
-  const res = await request(app).get('/api/admin/tables?active=bogus');
+  const res = await agent.get('/api/admin/tables?active=bogus');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 2);
   db.close();
@@ -227,13 +224,12 @@ test('GET /api/admin/tables?active=bogus ignores the filter', async () => {
 // ---------- PUT /api/admin/tables/:id ----------
 
 test('PUT updates label only, leaves table_number unchanged', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app)
+  const { app, agent, db } = await appWithDb();
+  const created = await agent
     .post('/api/admin/tables')
     .send({ table_number: 'T1', label: 'Old' });
 
-  const res = await request(app)
-    .put(`/api/admin/tables/${created.body.id}`)
+  const res = await agent.put(`/api/admin/tables/${created.body.id}`)
     .send({ label: 'New' });
 
   assert.equal(res.status, 200);
@@ -243,13 +239,11 @@ test('PUT updates label only, leaves table_number unchanged', async () => {
 });
 
 test('PUT updates table_number only', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app)
-    .post('/api/admin/tables')
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables')
     .send({ table_number: 'T1', label: 'Window' });
 
-  const res = await request(app)
-    .put(`/api/admin/tables/${created.body.id}`)
+  const res = await agent.put(`/api/admin/tables/${created.body.id}`)
     .send({ table_number: 'T99' });
 
   assert.equal(res.status, 200);
@@ -259,17 +253,15 @@ test('PUT updates table_number only', async () => {
 });
 
 test('PUT can set is_active to 0 and back to 1', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const off = await request(app)
-    .put(`/api/admin/tables/${created.body.id}`)
+  const off = await agent.put(`/api/admin/tables/${created.body.id}`)
     .send({ is_active: 0 });
   assert.equal(off.status, 200);
   assert.equal(off.body.is_active, 0);
 
-  const on = await request(app)
-    .put(`/api/admin/tables/${created.body.id}`)
+  const on = await agent.put(`/api/admin/tables/${created.body.id}`)
     .send({ is_active: true });
   assert.equal(on.status, 200);
   assert.equal(on.body.is_active, 1);
@@ -277,11 +269,10 @@ test('PUT can set is_active to 0 and back to 1', async () => {
 });
 
 test('PUT with empty body returns 400', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const res = await request(app)
-    .put(`/api/admin/tables/${created.body.id}`)
+  const res = await agent.put(`/api/admin/tables/${created.body.id}`)
     .send({});
 
   assert.equal(res.status, 400);
@@ -289,21 +280,19 @@ test('PUT with empty body returns 400', async () => {
 });
 
 test('PUT with unknown id returns 404', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app)
-    .put('/api/admin/tables/9999')
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.put('/api/admin/tables/9999')
     .send({ label: 'Ghost' });
   assert.equal(res.status, 404);
   db.close();
 });
 
 test('PUT renaming to an existing table_number returns 409', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  const second = await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  const second = await agent.post('/api/admin/tables').send({ table_number: 'T2' });
 
-  const res = await request(app)
-    .put(`/api/admin/tables/${second.body.id}`)
+  const res = await agent.put(`/api/admin/tables/${second.body.id}`)
     .send({ table_number: 'T1' });
 
   assert.equal(res.status, 409);
@@ -313,10 +302,10 @@ test('PUT renaming to an existing table_number returns 409', async () => {
 // ---------- DELETE /api/admin/tables/:id ----------
 
 test('DELETE soft-deletes (is_active = 0), does not remove the row', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const res = await request(app).delete(`/api/admin/tables/${created.body.id}`);
+  const res = await agent.delete(`/api/admin/tables/${created.body.id}`);
   assert.equal(res.status, 200);
   assert.equal(res.body.is_active, 0);
 
@@ -326,18 +315,18 @@ test('DELETE soft-deletes (is_active = 0), does not remove the row', async () =>
 });
 
 test('DELETE on unknown id returns 404', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).delete('/api/admin/tables/9999');
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.delete('/api/admin/tables/9999');
   assert.equal(res.status, 404);
   db.close();
 });
 
 test('DELETE twice is idempotent (second call still 200, is_active = 0)', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const first = await request(app).delete(`/api/admin/tables/${created.body.id}`);
-  const second = await request(app).delete(`/api/admin/tables/${created.body.id}`);
+  const first = await agent.delete(`/api/admin/tables/${created.body.id}`);
+  const second = await agent.delete(`/api/admin/tables/${created.body.id}`);
 
   assert.equal(first.status, 200);
   assert.equal(second.status, 200);
@@ -348,12 +337,11 @@ test('DELETE twice is idempotent (second call still 200, is_active = 0)', async 
 // ---------- POST /api/admin/tables/:id/regenerate-token ----------
 
 test('regenerate-token returns a new token and invalidates the old one', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
   const oldToken = created.body.qr_token;
 
-  const res = await request(app)
-    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+  const res = await agent.post(`/api/admin/tables/${created.body.id}/regenerate-token`)
     .send();
 
   assert.equal(res.status, 200);
@@ -367,13 +355,11 @@ test('regenerate-token returns a new token and invalidates the old one', async (
 });
 
 test('regenerate-token preserves other fields', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app)
-    .post('/api/admin/tables')
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables')
     .send({ table_number: 'T1', label: 'Window' });
 
-  const res = await request(app)
-    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+  const res = await agent.post(`/api/admin/tables/${created.body.id}/regenerate-token`)
     .send();
 
   assert.equal(res.body.table_number, 'T1');
@@ -384,14 +370,12 @@ test('regenerate-token preserves other fields', async () => {
 });
 
 test('regenerate-token twice gives two distinct tokens', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const first = await request(app)
-    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+  const first = await agent.post(`/api/admin/tables/${created.body.id}/regenerate-token`)
     .send();
-  const second = await request(app)
-    .post(`/api/admin/tables/${created.body.id}/regenerate-token`)
+  const second = await agent.post(`/api/admin/tables/${created.body.id}/regenerate-token`)
     .send();
 
   assert.notEqual(first.body.qr_token, second.body.qr_token);
@@ -400,18 +384,16 @@ test('regenerate-token twice gives two distinct tokens', async () => {
 });
 
 test('regenerate-token on unknown id returns 404', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app)
-    .post('/api/admin/tables/9999/regenerate-token')
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/tables/9999/regenerate-token')
     .send();
   assert.equal(res.status, 404);
   db.close();
 });
 
 test('regenerate-token on invalid id returns 400', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app)
-    .post('/api/admin/tables/abc/regenerate-token')
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/tables/abc/regenerate-token')
     .send();
   assert.equal(res.status, 400);
   db.close();
@@ -428,10 +410,10 @@ function getBuffer(res) {
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 
 test('QR endpoint returns a PNG', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const res = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png`);
+  const res = await agent.get(`/api/admin/tables/${created.body.id}/qr.png`);
 
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /^image\/png/);
@@ -443,48 +425,48 @@ test('QR endpoint returns a PNG', async () => {
 });
 
 test('QR endpoint returns 404 for unknown id', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).get('/api/admin/tables/9999/qr.png');
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.get('/api/admin/tables/9999/qr.png');
   assert.equal(res.status, 404);
   db.close();
 });
 
 test('QR endpoint returns 400 for invalid id', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).get('/api/admin/tables/abc/qr.png');
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.get('/api/admin/tables/abc/qr.png');
   assert.equal(res.status, 400);
   db.close();
 });
 
 test('QR endpoints for two different tables return different bytes', async () => {
-  const { app, db } = appWithDb();
-  const a = await request(app).post('/api/admin/tables').send({ table_number: 'A' });
-  const b = await request(app).post('/api/admin/tables').send({ table_number: 'B' });
+  const { app, agent, db } = await appWithDb();
+  const a = await agent.post('/api/admin/tables').send({ table_number: 'A' });
+  const b = await agent.post('/api/admin/tables').send({ table_number: 'B' });
 
-  const ra = await request(app).get(`/api/admin/tables/${a.body.id}/qr.png`);
-  const rb = await request(app).get(`/api/admin/tables/${b.body.id}/qr.png`);
+  const ra = await agent.get(`/api/admin/tables/${a.body.id}/qr.png`);
+  const rb = await agent.get(`/api/admin/tables/${b.body.id}/qr.png`);
 
   assert.notDeepEqual(getBuffer(ra), getBuffer(rb));
   db.close();
 });
 
 test('regenerating the token changes the QR bytes', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const before = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png`);
-  await request(app).post(`/api/admin/tables/${created.body.id}/regenerate-token`).send();
-  const after = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png`);
+  const before = await agent.get(`/api/admin/tables/${created.body.id}/qr.png`);
+  await agent.post(`/api/admin/tables/${created.body.id}/regenerate-token`).send();
+  const after = await agent.get(`/api/admin/tables/${created.body.id}/qr.png`);
 
   assert.notDeepEqual(getBuffer(before), getBuffer(after));
   db.close();
 });
 
 test('QR endpoint accepts a size query param without erroring', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
 
-  const res = await request(app).get(`/api/admin/tables/${created.body.id}/qr.png?size=256`);
+  const res = await agent.get(`/api/admin/tables/${created.body.id}/qr.png?size=256`);
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /^image\/png/);
   db.close();

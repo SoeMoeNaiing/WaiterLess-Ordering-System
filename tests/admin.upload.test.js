@@ -5,6 +5,7 @@ import { existsSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createApp } from '../server/app.js';
 import { createDb } from '../server/db.js';
+import { loginAdmin } from './helpers/auth.js';
 
 // Tiny 1x1 transparent PNG (67 bytes)
 const PNG_1x1 = Buffer.from(
@@ -23,17 +24,19 @@ function freshUploadDir() {
   }
 }
 
-function appWithDb() {
+async function appWithDb() {
   const db = createDb(':memory:', { quiet: true });
-  return { app: createApp({ db }), db };
+  const app = createApp({ db });
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+  return { app, agent, db };
 }
 
 test('POST /api/admin/upload saves a PNG and returns its path', async () => {
   freshUploadDir();
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const res = await request(app)
-    .post('/api/admin/upload')
+  const res = await agent.post('/api/admin/upload')
     .attach('file', PNG_1x1, 'photo.png');
 
   assert.equal(res.status, 201);
@@ -47,16 +50,15 @@ test('POST /api/admin/upload saves a PNG and returns its path', async () => {
 });
 
 test('upload with no file returns 400', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).post('/api/admin/upload').send({});
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/upload').send({});
   assert.equal(res.status, 400);
   db.close();
 });
 
 test('upload rejects a disallowed extension', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app)
-    .post('/api/admin/upload')
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/upload')
     .attach('file', PNG_1x1, 'evil.txt');
   assert.equal(res.status, 400);
   assert.match(res.body.error, /only jpg/);
@@ -65,10 +67,10 @@ test('upload rejects a disallowed extension', async () => {
 
 test('two uploads get different filenames', async () => {
   freshUploadDir();
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const a = await request(app).post('/api/admin/upload').attach('file', PNG_1x1, 'a.png');
-  const b = await request(app).post('/api/admin/upload').attach('file', PNG_1x1, 'b.png');
+  const a = await agent.post('/api/admin/upload').attach('file', PNG_1x1, 'a.png');
+  const b = await agent.post('/api/admin/upload').attach('file', PNG_1x1, 'b.png');
 
   assert.notEqual(a.body.path, b.body.path);
   db.close();
@@ -76,9 +78,9 @@ test('two uploads get different filenames', async () => {
 
 test('uploaded file is reachable via /uploads/:name', async () => {
   freshUploadDir();
-  const { app, db } = appWithDb();
+  const { app, agent, db } = await appWithDb();
 
-  const up = await request(app).post('/api/admin/upload').attach('file', PNG_1x1, 'photo.png');
+  const up = await agent.post('/api/admin/upload').attach('file', PNG_1x1, 'photo.png');
   assert.equal(up.status, 201);
 
   const got = await request(app).get(up.body.path);

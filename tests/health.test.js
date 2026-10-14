@@ -10,7 +10,7 @@ function appWithDb() {
 }
 
 test('GET /health returns ok:true and db:connected', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   const res = await request(app).get('/health');
   assert.equal(res.status, 200);
   assert.equal(res.body.ok, true);
@@ -28,7 +28,7 @@ test('GET /health reports db:unavailable if no db is injected', async () => {
 });
 
 test('GET /nope returns 404', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   const res = await request(app).get('/nope');
   assert.equal(res.status, 404);
   db.close();

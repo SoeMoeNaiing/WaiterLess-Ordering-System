@@ -3,18 +3,21 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../server/app.js';
 import { createDb } from '../server/db.js';
+import { loginAdmin } from './helpers/auth.js';
 
-function appWithDb() {
+async function appWithDb() {
   const db = createDb(':memory:', { quiet: true });
-  return { app: createApp({ db }), db };
+  const app = createApp({ db });
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+  return { app, agent, db };
 }
 
 // ---------- POST ----------
 
 test('POST creates a category with default sort_order', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app)
-    .post('/api/admin/categories')
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/categories')
     .send({ name: 'Starters' });
 
   assert.equal(res.status, 201);
@@ -26,9 +29,8 @@ test('POST creates a category with default sort_order', async () => {
 });
 
 test('POST with sort_order stores it', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app)
-    .post('/api/admin/categories')
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/categories')
     .send({ name: 'Mains', sort_order: 5 });
 
   assert.equal(res.status, 201);
@@ -37,16 +39,16 @@ test('POST with sort_order stores it', async () => {
 });
 
 test('POST without name returns 400', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).post('/api/admin/categories').send({});
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/categories').send({});
   assert.equal(res.status, 400);
   db.close();
 });
 
 test('POST duplicate name returns 409', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/categories').send({ name: 'Drinks' });
-  const res = await request(app).post('/api/admin/categories').send({ name: 'Drinks' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/categories').send({ name: 'Drinks' });
+  const res = await agent.post('/api/admin/categories').send({ name: 'Drinks' });
   assert.equal(res.status, 409);
   db.close();
 });
@@ -54,12 +56,12 @@ test('POST duplicate name returns 409', async () => {
 // ---------- GET ----------
 
 test('GET returns categories ordered by sort_order, name', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/categories').send({ name: 'Zeta', sort_order: 1 });
-  await request(app).post('/api/admin/categories').send({ name: 'Alpha', sort_order: 1 });
-  await request(app).post('/api/admin/categories').send({ name: 'Middles', sort_order: 0 });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/categories').send({ name: 'Zeta', sort_order: 1 });
+  await agent.post('/api/admin/categories').send({ name: 'Alpha', sort_order: 1 });
+  await agent.post('/api/admin/categories').send({ name: 'Middles', sort_order: 0 });
 
-  const res = await request(app).get('/api/admin/categories');
+  const res = await agent.get('/api/admin/categories');
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.map((c) => c.name), ['Middles', 'Alpha', 'Zeta']);
   db.close();
@@ -68,11 +70,10 @@ test('GET returns categories ordered by sort_order, name', async () => {
 // ---------- PUT ----------
 
 test('PUT updates name only', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/categories').send({ name: 'Old' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/categories').send({ name: 'Old' });
 
-  const res = await request(app)
-    .put(`/api/admin/categories/${created.body.id}`)
+  const res = await agent.put(`/api/admin/categories/${created.body.id}`)
     .send({ name: 'New' });
 
   assert.equal(res.status, 200);
@@ -82,12 +83,11 @@ test('PUT updates name only', async () => {
 });
 
 test('PUT to a name that already exists returns 409', async () => {
-  const { app, db } = appWithDb();
-  await request(app).post('/api/admin/categories').send({ name: 'A' });
-  const b = await request(app).post('/api/admin/categories').send({ name: 'B' });
+  const { app, agent, db } = await appWithDb();
+  await agent.post('/api/admin/categories').send({ name: 'A' });
+  const b = await agent.post('/api/admin/categories').send({ name: 'B' });
 
-  const res = await request(app)
-    .put(`/api/admin/categories/${b.body.id}`)
+  const res = await agent.put(`/api/admin/categories/${b.body.id}`)
     .send({ name: 'A' });
 
   assert.equal(res.status, 409);
@@ -95,18 +95,17 @@ test('PUT to a name that already exists returns 409', async () => {
 });
 
 test('PUT with empty body returns 400', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/categories').send({ name: 'X' });
-  const res = await request(app)
-    .put(`/api/admin/categories/${created.body.id}`)
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/categories').send({ name: 'X' });
+  const res = await agent.put(`/api/admin/categories/${created.body.id}`)
     .send({});
   assert.equal(res.status, 400);
   db.close();
 });
 
 test('PUT on unknown id returns 404', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).put('/api/admin/categories/9999').send({ name: 'X' });
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.put('/api/admin/categories/9999').send({ name: 'X' });
   assert.equal(res.status, 404);
   db.close();
 });
@@ -114,10 +113,10 @@ test('PUT on unknown id returns 404', async () => {
 // ---------- DELETE ----------
 
 test('DELETE removes the category row entirely (hard delete)', async () => {
-  const { app, db } = appWithDb();
-  const created = await request(app).post('/api/admin/categories').send({ name: 'Temp' });
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/categories').send({ name: 'Temp' });
 
-  const res = await request(app).delete(`/api/admin/categories/${created.body.id}`);
+  const res = await agent.delete(`/api/admin/categories/${created.body.id}`);
   assert.equal(res.status, 200);
   assert.equal(res.body.deleted, true);
 
@@ -127,13 +126,13 @@ test('DELETE removes the category row entirely (hard delete)', async () => {
 });
 
 test('DELETE leaves menu_items alive with category_id = NULL', async () => {
-  const { app, db } = appWithDb();
-  const cat = await request(app).post('/api/admin/categories').send({ name: 'Drinks' });
+  const { app, agent, db } = await appWithDb();
+  const cat = await agent.post('/api/admin/categories').send({ name: 'Drinks' });
 
   db.prepare('INSERT INTO menu_items (category_id, name, price) VALUES (?, ?, ?)')
     .run(cat.body.id, 'Cola', 2.0);
 
-  await request(app).delete(`/api/admin/categories/${cat.body.id}`);
+  await agent.delete(`/api/admin/categories/${cat.body.id}`);
 
   const item = db.prepare('SELECT * FROM menu_items WHERE name = ?').get('Cola');
   assert.ok(item, 'item should survive');
@@ -142,8 +141,8 @@ test('DELETE leaves menu_items alive with category_id = NULL', async () => {
 });
 
 test('DELETE on unknown id returns 404', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).delete('/api/admin/categories/9999');
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.delete('/api/admin/categories/9999');
   assert.equal(res.status, 404);
   db.close();
 });

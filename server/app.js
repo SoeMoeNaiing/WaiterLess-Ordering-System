@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { lanOnly } from './middleware/lanOnly.js';
+import { requireAdmin, requireKitchen } from './middleware/auth.js';
 import { createRateLimiter } from './middleware/loginRateLimit.js';
 import { adminAuthRouter } from './routes/admin.auth.js';
 import { kitchenAuthRouter } from './routes/kitchen.auth.js';
@@ -44,17 +45,21 @@ export function createApp({ db } = {}) {
     });
   });
 
-  // Auth routes — must be mounted BEFORE the routers they'll eventually gate
+  // Auth endpoints — open by design
   app.use('/api/admin/auth', adminAuthRouter({ db, rateLimit }));
   app.use('/api/kitchen/auth', kitchenAuthRouter({ db, rateLimit }));
 
   if (db) {
-    // --- These will be gated in 8.1b ---
-    app.use('/api/admin/tables', adminTablesRouter({ db }));
-    app.use('/api/admin/categories', adminCategoriesRouter({ db }));
-    app.use('/api/admin/menu-items', adminMenuItemsRouter({ db }));
-    app.use('/api/admin/upload', adminUploadRouter());
-    app.use('/api/kitchen', kitchenRouter({ db }));
+    // Kitchen (auth-gated, accepts admin OR kitchen cookie)
+    app.use('/api/kitchen', requireKitchen, kitchenRouter({ db }));
+
+    // Admin (auth-gated, admin cookie only)
+    app.use('/api/admin/tables', requireAdmin, adminTablesRouter({ db }));
+    app.use('/api/admin/categories', requireAdmin, adminCategoriesRouter({ db }));
+    app.use('/api/admin/menu-items', requireAdmin, adminMenuItemsRouter({ db }));
+    app.use('/api/admin/upload', requireAdmin, adminUploadRouter());
+
+    // Customer — no auth (QR token is the credential)
     app.use(customerRouter({ db }));
   }
 

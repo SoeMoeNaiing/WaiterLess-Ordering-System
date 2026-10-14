@@ -13,7 +13,7 @@ function appWithDb() {
 // ---------- Admin login ----------
 
 test('admin login with correct pin sets cookie', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   const res = await request(app).post('/api/admin/auth/login').send({ pin: '1234' });
   assert.equal(res.status, 200);
   assert.ok(res.headers['set-cookie'][0].startsWith('rs_admin='));
@@ -21,21 +21,21 @@ test('admin login with correct pin sets cookie', async () => {
 });
 
 test('admin login with wrong pin returns 401', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   const res = await request(app).post('/api/admin/auth/login').send({ pin: '9999' });
   assert.equal(res.status, 401);
   db.close();
 });
 
 test('admin login with empty pin returns 400', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   const res = await request(app).post('/api/admin/auth/login').send({ pin: '' });
   assert.equal(res.status, 400);
   db.close();
 });
 
 test('admin logout clears the cookie', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   const res = await request(app).post('/api/admin/auth/logout');
   assert.equal(res.status, 200);
   assert.match(res.headers['set-cookie'][0], /^rs_admin=;/);
@@ -45,7 +45,7 @@ test('admin logout clears the cookie', async () => {
 // ---------- Kitchen login ----------
 
 test('kitchen login accepts admin pin when kitchen_pin not set', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   const res = await request(app).post('/api/kitchen/auth/login').send({ pin: '1234' });
   assert.equal(res.status, 200);
   assert.ok(res.headers['set-cookie'][0].startsWith('rs_kitchen='));
@@ -53,7 +53,7 @@ test('kitchen login accepts admin pin when kitchen_pin not set', async () => {
 });
 
 test('kitchen login uses kitchen_pin when set', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   db.prepare("INSERT INTO settings (key, value) VALUES ('kitchen_pin', '5678')").run();
 
   const wrong = await request(app).post('/api/kitchen/auth/login').send({ pin: '1234' });
@@ -67,7 +67,7 @@ test('kitchen login uses kitchen_pin when set', async () => {
 // ---------- Rate limiting ----------
 
 test('5 wrong PINs trigger a 429 lockout on next attempt', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   for (let i = 0; i < 5; i++) {
     const r = await request(app).post('/api/admin/auth/login').send({ pin: '0000' });
     assert.equal(r.status, 401);
@@ -79,7 +79,7 @@ test('5 wrong PINs trigger a 429 lockout on next attempt', async () => {
 });
 
 test('successful login clears the fail counter', async () => {
-  const { app, db } = appWithDb();
+  const { app, db, cookie, kitchenCookie } = await appWithDb();
   for (let i = 0; i < 3; i++) {
     await request(app).post('/api/admin/auth/login').send({ pin: '0000' });
   }

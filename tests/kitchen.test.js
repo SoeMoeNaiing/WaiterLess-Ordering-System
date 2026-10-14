@@ -3,16 +3,20 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../server/app.js';
 import { createDb } from '../server/db.js';
+import { loginAdmin } from './helpers/auth.js';
 
-function appWithDb() {
+async function appWithDb() {
   const db = createDb(':memory:', { quiet: true });
-  return { app: createApp({ db }), db };
+  const app = createApp({ db });
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+  return { app, agent, db };
 }
 
-async function makeTableAndItem(app) {
-  const t = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
-  const cat = await request(app).post('/api/admin/categories').send({ name: 'C' });
-  const item = await request(app).post('/api/admin/menu-items')
+async function makeTableAndItem(agent) {
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  const cat = await agent.post('/api/admin/categories').send({ name: 'C' });
+  const item = await agent.post('/api/admin/menu-items')
     .send({ name: 'X', price: 4.5, category_id: cat.body.id });
   return { table: t.body, item: item.body };
 }
@@ -23,19 +27,19 @@ async function placeOrder(app, token, items) {
 }
 
 test('kitchen orders returns empty array when no orders', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app).get('/api/kitchen/orders');
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.get('/api/kitchen/orders');
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, []);
   db.close();
 });
 
 test('kitchen orders returns active orders with items and table info', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 2 }]);
 
-  const res = await request(app).get('/api/kitchen/orders');
+  const res = await agent.get('/api/kitchen/orders');
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 1);
   const o = res.body[0];
@@ -49,8 +53,8 @@ test('kitchen orders returns active orders with items and table info', async () 
 });
 
 test('kitchen orders hides served and cancelled by default', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o1 = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
   const o2 = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
   const o3 = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
@@ -58,47 +62,47 @@ test('kitchen orders hides served and cancelled by default', async () => {
   db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('served', o1.order.id);
   db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('cancelled', o2.order.id);
 
-  const res = await request(app).get('/api/kitchen/orders');
+  const res = await agent.get('/api/kitchen/orders');
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].id, o3.order.id);
   db.close();
 });
 
 test('kitchen orders?status=all returns served and cancelled too', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o1 = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
   const o2 = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
   db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('served', o1.order.id);
   db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('cancelled', o2.order.id);
 
-  const res = await request(app).get('/api/kitchen/orders?status=all');
+  const res = await agent.get('/api/kitchen/orders?status=all');
   assert.equal(res.body.length, 2);
   db.close();
 });
 
 test('kitchen orders are sorted oldest first', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o1 = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
   const o2 = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
   // Force different created_at values
   db.prepare('UPDATE orders SET created_at = ? WHERE id = ?').run('2026-01-02 10:00:00', o2.order.id);
   db.prepare('UPDATE orders SET created_at = ? WHERE id = ?').run('2026-01-01 10:00:00', o1.order.id);
 
-  const res = await request(app).get('/api/kitchen/orders');
+  const res = await agent.get('/api/kitchen/orders');
   assert.equal(res.body[0].id, o1.order.id);
   assert.equal(res.body[1].id, o2.order.id);
   db.close();
 });
 
 test('kitchen orders includes preparing and ready', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
   db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('preparing', o.order.id);
 
-  const res = await request(app).get('/api/kitchen/orders');
+  const res = await agent.get('/api/kitchen/orders');
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].status, 'preparing');
   db.close();
@@ -107,11 +111,11 @@ test('kitchen orders includes preparing and ready', async () => {
 // ---------- PATCH /api/kitchen/orders/:id ----------
 
 test('PATCH updates status from placed to preparing', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
 
-  const res = await request(app)
+  const res = await agent
     .patch(`/api/kitchen/orders/${o.order.id}`)
     .send({ status: 'preparing' });
 
@@ -122,13 +126,12 @@ test('PATCH updates status from placed to preparing', async () => {
 });
 
 test('PATCH can walk through preparing -> ready -> served', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
 
   for (const s of ['preparing', 'ready', 'served']) {
-    const res = await request(app)
-      .patch(`/api/kitchen/orders/${o.order.id}`)
+    const res = await agent.patch(`/api/kitchen/orders/${o.order.id}`)
       .send({ status: s });
     assert.equal(res.body.status, s);
   }
@@ -136,12 +139,11 @@ test('PATCH can walk through preparing -> ready -> served', async () => {
 });
 
 test('PATCH accepts cancelled', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
 
-  const res = await request(app)
-    .patch(`/api/kitchen/orders/${o.order.id}`)
+  const res = await agent.patch(`/api/kitchen/orders/${o.order.id}`)
     .send({ status: 'cancelled' });
   assert.equal(res.status, 200);
   assert.equal(res.body.status, 'cancelled');
@@ -149,34 +151,32 @@ test('PATCH accepts cancelled', async () => {
 });
 
 test('PATCH rejects unknown status with 400', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
 
-  const res = await request(app)
-    .patch(`/api/kitchen/orders/${o.order.id}`)
+  const res = await agent.patch(`/api/kitchen/orders/${o.order.id}`)
     .send({ status: 'bogus' });
   assert.equal(res.status, 400);
   db.close();
 });
 
 test('PATCH with empty body returns 400', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
 
-  const res = await request(app).patch(`/api/kitchen/orders/${o.order.id}`).send({});
+  const res = await agent.patch(`/api/kitchen/orders/${o.order.id}`).send({});
   assert.equal(res.status, 400);
   db.close();
 });
 
 test('PATCH updates notes without touching status', async () => {
-  const { app, db } = appWithDb();
-  const { table, item } = await makeTableAndItem(app);
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
   const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
 
-  const res = await request(app)
-    .patch(`/api/kitchen/orders/${o.order.id}`)
+  const res = await agent.patch(`/api/kitchen/orders/${o.order.id}`)
     .send({ notes: 'No onions' });
 
   assert.equal(res.status, 200);
@@ -186,9 +186,8 @@ test('PATCH updates notes without touching status', async () => {
 });
 
 test('PATCH on unknown id returns 404', async () => {
-  const { app, db } = appWithDb();
-  const res = await request(app)
-    .patch('/api/kitchen/orders/9999')
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.patch('/api/kitchen/orders/9999')
     .send({ status: 'preparing' });
   assert.equal(res.status, 404);
   db.close();
