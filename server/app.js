@@ -5,6 +5,7 @@ import { adminTablesRouter } from './routes/admin.tables.js';
 import { adminCategoriesRouter } from './routes/admin.categories.js';
 import { adminMenuItemsRouter } from './routes/admin.menu-items.js';
 import { adminUploadRouter } from './routes/admin.upload.js';
+import { customerRouter } from './routes/customer.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
@@ -17,6 +18,8 @@ export function createApp({ db } = {}) {
   app.use('/uploads', express.static('uploads'));
   app.use('/admin', express.static('public/admin'));
 
+  app.get('/', (req, res) => res.redirect('/admin/'));
+
   app.get('/health', (req, res) => {
     if (db) {
       try {
@@ -27,7 +30,6 @@ export function createApp({ db } = {}) {
         });
       }
     }
-
     res.json({
       ok: true,
       db: db ? 'connected' : 'unavailable',
@@ -39,6 +41,7 @@ export function createApp({ db } = {}) {
     app.use('/api/admin/tables', adminTablesRouter({ db }));
     app.use('/api/admin/categories', adminCategoriesRouter({ db }));
     app.use('/api/admin/menu-items', adminMenuItemsRouter({ db }));
+    app.use(customerRouter({ db }));
   }
 
   app.use('/api/admin/upload', adminUploadRouter());
