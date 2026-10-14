@@ -446,7 +446,7 @@ test('GET /t/:token/order/:id serves the status page HTML', async () => {
   const res = await request(app).get(`/t/${t.qr_token}/order/1`);
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /^text\/html/);
-  assert.match(res.text, /Order status/);
+  assert.match(res.text, /Your orders/);
   db.close();
 });
 
@@ -455,5 +455,63 @@ test('GET /customer/status.js is served', async () => {
   const res = await request(app).get('/customer/status.js');
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /javascript/);
+  db.close();
+});
+
+test('GET /api/customer/orders?token=... returns all orders for the table', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'X', price: 4.5 });
+
+  await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+  await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 2 }],
+  });
+
+  const res = await request(app).get(`/api/customer/orders?token=${t.qr_token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.table.table_number, 'T1');
+  assert.equal(res.body.orders.length, 2);
+  // newest first
+  assert.equal(res.body.orders[0].items[0].qty, 2);
+  assert.equal(res.body.orders[1].items[0].qty, 1);
+  db.close();
+});
+
+test('GET /api/customer/orders excludes other tables', async () => {
+  const { app, db } = appWithDb();
+  const t1 = await makeTable(app, { table_number: 'T1' });
+  const t2 = await makeTable(app, { table_number: 'T2' });
+  const item = await seedMenuItem(app, { name: 'X', price: 1 });
+
+  await request(app).post('/api/customer/orders').send({
+    token: t1.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+  await request(app).post('/api/customer/orders').send({
+    token: t2.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+
+  const res = await request(app).get(`/api/customer/orders?token=${t1.qr_token}`);
+  assert.equal(res.body.orders.length, 1);
+  db.close();
+});
+
+test('GET /api/customer/orders returns empty array for a new table', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const res = await request(app).get(`/api/customer/orders?token=${t.qr_token}`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.orders, []);
+  db.close();
+});
+
+test('GET /t/:token/orders serves the orders page HTML', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const res = await request(app).get(`/t/${t.qr_token}/orders`);
+  assert.equal(res.status, 200);
+  assert.match(res.text, /Your orders/);
   db.close();
 });

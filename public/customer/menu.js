@@ -224,41 +224,9 @@ async function placeOrder() {
   }
 }
 
-function showConfirmation({ order, items }) {
-  const inner = $('cart-inner');
-  inner.dataset.mode = 'confirmation';
-  inner.replaceChildren();
-
-  inner.appendChild(el('div', { className: 'confirmation' }, [
-    el('div', { className: 'big', text: 'Order placed' }),
-    el('h3', { text: `Order #${order.id} placed` }),
-    el('div', {
-      className: 'muted',
-      text: 'Please wait for your food.',
-      style: 'color:#888;',
-    }),
-    el('div', {
-      className: 'total',
-      text: formatPrice(order.total),
-      style: 'margin-top: 1rem;',
-    }),
-    el('div', {
-      className: 'muted',
-      text: `${items.length} item${items.length === 1 ? '' : 's'}`,
-      style: 'margin-top: 0.25rem; color:#888;',
-    }),
-  ]));
-
-  inner.appendChild(el('button', {
-    className: 'close',
-    text: 'Order more',
-    onclick: () => {
-      inner.dataset.mode = '';
-      $('cart-panel').classList.remove('show');
-      // Restore the cart structure
-      location.reload();
-    },
-  }));
+function showConfirmation({ order }) {
+  const token = getToken();
+  window.location.href = `/t/${token}/order/${order.id}`;
 }
 
 // ---------- Boot ----------

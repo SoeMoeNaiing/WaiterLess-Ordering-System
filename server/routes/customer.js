@@ -51,7 +51,16 @@ function validateItems(db, items) {
 export function customerRouter({ db }) {
   const router = Router();
 
-  // GET /t/:token/order/:id — status page
+  // GET /t/:token/orders — all-orders page
+  router.get('/t/:token/orders', (req, res) => {
+    const { error } = findTableByToken(db, req.params.token);
+    if (error === 'notfound') return res.status(404).send('Table not found');
+    if (error === 'inactive') return res.status(410).send('This table is no longer active');
+    if (error) return res.status(400).send('Missing token');
+    res.type('html').send(readFileSync(join(PUBLIC_DIR, 'status.html'), 'utf8'));
+  });
+
+  // GET /t/:token/order/:id — single order page (legacy, still supported)
   router.get('/t/:token/order/:id', (req, res) => {
     const { error } = findTableByToken(db, req.params.token);
     if (error === 'notfound') return res.status(404).send('Table not found');
@@ -163,7 +172,32 @@ export function customerRouter({ db }) {
     res.status(201).json({ order, items: orderItems });
   });
 
-  // GET /api/customer/orders/:id?token=...
+  // GET /api/customer/orders?token=... — all orders for this table (last 12h)
+  router.get('/api/customer/orders', (req, res) => {
+    const { table, error } = findTableByToken(db, req.query.token);
+    if (error === 'notfound') return res.status(404).json({ error: 'table not found' });
+    if (error === 'inactive') return res.status(410).json({ error: 'table inactive' });
+    if (error) return res.status(400).json({ error: 'token is required' });
+
+    const orders = db.prepare(
+      `SELECT id, status, total, notes, created_at, updated_at
+         FROM orders
+        WHERE table_id = ?
+          AND created_at > datetime('now', '-12 hours')
+        ORDER BY created_at DESC, id DESC`
+    ).all(table.id);
+
+    const itemsStmt = db.prepare(
+      'SELECT id, name_snapshot, price_snapshot, qty, notes FROM order_items WHERE order_id = ? ORDER BY id'
+    );
+
+    res.json({
+      table: { id: table.id, table_number: table.table_number, label: table.label },
+      orders: orders.map((o) => ({ ...o, items: itemsStmt.all(o.id) })),
+    });
+  });
+
+  // GET /api/customer/orders/:id?token=... — single order
   router.get('/api/customer/orders/:id', (req, res) => {
     const orderId = Number(req.params.id);
     if (!Number.isInteger(orderId) || orderId <= 0) {
