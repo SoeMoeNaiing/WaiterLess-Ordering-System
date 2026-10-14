@@ -3,6 +3,7 @@ import express from 'express';
 import { lanOnly } from './middleware/lanOnly.js';
 import { adminTablesRouter } from './routes/admin.tables.js';
 import { adminCategoriesRouter } from './routes/admin.categories.js';
+import { adminMenuItemsRouter } from './routes/admin.menu-items.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
@@ -33,6 +34,7 @@ export function createApp({ db } = {}) {
   if (db) {
     app.use('/api/admin/tables', adminTablesRouter({ db }));
     app.use('/api/admin/categories', adminCategoriesRouter({ db }));
+    app.use('/api/admin/menu-items', adminMenuItemsRouter({ db }));
   }
 
   return app;
