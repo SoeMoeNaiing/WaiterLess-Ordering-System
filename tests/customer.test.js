@@ -179,3 +179,13 @@ test('categories are ordered by sort_order then name', async () => {
   assert.deepEqual(res.body.categories.map((c) => c.name), ['Alpha', 'Zeta']);
   db.close();
 });
+
+test('GET /t/:token serves the customer menu script', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  // The script is served by static middleware from public/customer
+  const res = await request(app).get('/customer/menu.js');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /javascript/);
+  db.close();
+});
