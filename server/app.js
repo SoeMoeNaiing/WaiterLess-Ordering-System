@@ -4,6 +4,7 @@ import { lanOnly } from './middleware/lanOnly.js';
 import { adminTablesRouter } from './routes/admin.tables.js';
 import { adminCategoriesRouter } from './routes/admin.categories.js';
 import { adminMenuItemsRouter } from './routes/admin.menu-items.js';
+import { adminUploadRouter } from './routes/admin.upload.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
@@ -12,6 +13,9 @@ export function createApp({ db } = {}) {
 
   app.use(express.json());
   app.use(lanOnly(LAN_PREFIX));
+
+  // Static assets: uploaded images
+  app.use('/uploads', express.static('uploads'));
 
   app.get('/health', (req, res) => {
     if (db) {
@@ -36,6 +40,8 @@ export function createApp({ db } = {}) {
     app.use('/api/admin/categories', adminCategoriesRouter({ db }));
     app.use('/api/admin/menu-items', adminMenuItemsRouter({ db }));
   }
+
+  app.use('/api/admin/upload', adminUploadRouter());
 
   return app;
 }
