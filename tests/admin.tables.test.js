@@ -223,3 +223,124 @@ test('GET /api/admin/tables?active=bogus ignores the filter', async () => {
   assert.equal(res.body.length, 2);
   db.close();
 });
+
+// ---------- PUT /api/admin/tables/:id ----------
+
+test('PUT updates label only, leaves table_number unchanged', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app)
+    .post('/api/admin/tables')
+    .send({ table_number: 'T1', label: 'Old' });
+
+  const res = await request(app)
+    .put(`/api/admin/tables/${created.body.id}`)
+    .send({ label: 'New' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.label, 'New');
+  assert.equal(res.body.table_number, 'T1');
+  db.close();
+});
+
+test('PUT updates table_number only', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app)
+    .post('/api/admin/tables')
+    .send({ table_number: 'T1', label: 'Window' });
+
+  const res = await request(app)
+    .put(`/api/admin/tables/${created.body.id}`)
+    .send({ table_number: 'T99' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.table_number, 'T99');
+  assert.equal(res.body.label, 'Window');
+  db.close();
+});
+
+test('PUT can set is_active to 0 and back to 1', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const off = await request(app)
+    .put(`/api/admin/tables/${created.body.id}`)
+    .send({ is_active: 0 });
+  assert.equal(off.status, 200);
+  assert.equal(off.body.is_active, 0);
+
+  const on = await request(app)
+    .put(`/api/admin/tables/${created.body.id}`)
+    .send({ is_active: true });
+  assert.equal(on.status, 200);
+  assert.equal(on.body.is_active, 1);
+  db.close();
+});
+
+test('PUT with empty body returns 400', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const res = await request(app)
+    .put(`/api/admin/tables/${created.body.id}`)
+    .send({});
+
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('PUT with unknown id returns 404', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app)
+    .put('/api/admin/tables/9999')
+    .send({ label: 'Ghost' });
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('PUT renaming to an existing table_number returns 409', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  const second = await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+
+  const res = await request(app)
+    .put(`/api/admin/tables/${second.body.id}`)
+    .send({ table_number: 'T1' });
+
+  assert.equal(res.status, 409);
+  db.close();
+});
+
+// ---------- DELETE /api/admin/tables/:id ----------
+
+test('DELETE soft-deletes (is_active = 0), does not remove the row', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const res = await request(app).delete(`/api/admin/tables/${created.body.id}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.is_active, 0);
+
+  const stillThere = db.prepare('SELECT * FROM tables WHERE id = ?').get(created.body.id);
+  assert.ok(stillThere, 'row must still exist');
+  db.close();
+});
+
+test('DELETE on unknown id returns 404', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).delete('/api/admin/tables/9999');
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('DELETE twice is idempotent (second call still 200, is_active = 0)', async () => {
+  const { app, db } = appWithDb();
+  const created = await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const first = await request(app).delete(`/api/admin/tables/${created.body.id}`);
+  const second = await request(app).delete(`/api/admin/tables/${created.body.id}`);
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(second.body.is_active, 0);
+  db.close();
+});
