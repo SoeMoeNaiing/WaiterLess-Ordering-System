@@ -98,3 +98,128 @@ test('table_number is trimmed before saving', async () => {
   assert.equal(res.body.table_number, 'T9');
   db.close();
 });
+
+
+// ---------- GET /api/admin/tables ----------
+
+test('GET /api/admin/tables returns an empty array initially', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/admin/tables');
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, []);
+  db.close();
+});
+
+test('GET /api/admin/tables returns all tables ordered by table_number', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T3' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+
+  const res = await request(app).get('/api/admin/tables');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 3);
+  assert.deepEqual(res.body.map((t) => t.table_number), ['T1', 'T2', 'T3']);
+  db.close();
+});
+
+test('GET /api/admin/tables?active=1 returns only active tables', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+
+  // Deactivate T2 directly via the DB (no HTTP endpoint for this yet)
+  db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
+
+  const res = await request(app).get('/api/admin/tables?active=1');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].table_number, 'T1');
+  db.close();
+});
+
+test('GET /api/admin/tables?active=0 returns only inactive tables', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
+
+  const res = await request(app).get('/api/admin/tables?active=0');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].table_number, 'T2');
+  db.close();
+});
+
+test('GET /api/admin/tables?active=bogus ignores the filter', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
+
+  const res = await request(app).get('/api/admin/tables?active=bogus');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 2);
+  db.close();
+});
+// ---------- GET /api/admin/tables ----------
+
+test('GET /api/admin/tables returns an empty array initially', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/admin/tables');
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, []);
+  db.close();
+});
+
+test('GET /api/admin/tables returns all tables ordered by table_number', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T3' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+
+  const res = await request(app).get('/api/admin/tables');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 3);
+  assert.deepEqual(res.body.map((t) => t.table_number), ['T1', 'T2', 'T3']);
+  db.close();
+});
+
+test('GET /api/admin/tables?active=1 returns only active tables', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+
+  db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
+
+  const res = await request(app).get('/api/admin/tables?active=1');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].table_number, 'T1');
+  db.close();
+});
+
+test('GET /api/admin/tables?active=0 returns only inactive tables', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
+
+  const res = await request(app).get('/api/admin/tables?active=0');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].table_number, 'T2');
+  db.close();
+});
+
+test('GET /api/admin/tables?active=bogus ignores the filter', async () => {
+  const { app, db } = appWithDb();
+  await request(app).post('/api/admin/tables').send({ table_number: 'T1' });
+  await request(app).post('/api/admin/tables').send({ table_number: 'T2' });
+  db.prepare('UPDATE tables SET is_active = 0 WHERE table_number = ?').run('T2');
+
+  const res = await request(app).get('/api/admin/tables?active=bogus');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 2);
+  db.close();
+});
