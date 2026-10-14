@@ -358,3 +358,84 @@ test('POST with multiple items sums the total', async () => {
   assert.equal(res.body.items.length, 2);
   db.close();
 });
+
+// ---------- GET /api/customer/orders/:id ----------
+
+test('order status returns order + items for the matching token', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'X', price: 4.5 });
+  const placed = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 2 }],
+  });
+
+  const res = await request(app)
+    .get(`/api/customer/orders/${placed.body.order.id}?token=${t.qr_token}`);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.order.id, placed.body.order.id);
+  assert.equal(res.body.order.status, 'placed');
+  assert.equal(res.body.order.total, 9.0);
+  assert.equal(res.body.items.length, 1);
+  assert.equal(res.body.items[0].name_snapshot, 'X');
+  assert.equal(res.body.items[0].qty, 2);
+  db.close();
+});
+
+test('order status reflects updates from the kitchen', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const item = await seedMenuItem(app, { name: 'X', price: 1 });
+  const placed = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+
+  await request(app)
+    .patch(`/api/kitchen/orders/${placed.body.order.id}`)
+    .send({ status: 'preparing' });
+
+  const res = await request(app)
+    .get(`/api/customer/orders/${placed.body.order.id}?token=${t.qr_token}`);
+  assert.equal(res.body.order.status, 'preparing');
+  db.close();
+});
+
+test('order status 404 for mismatched token', async () => {
+  const { app, db } = appWithDb();
+  const t1 = await makeTable(app, { table_number: 'T1' });
+  const t2 = await makeTable(app, { table_number: 'T2' });
+  const item = await seedMenuItem(app, { name: 'X', price: 1 });
+  const placed = await request(app).post('/api/customer/orders').send({
+    token: t1.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+
+  const res = await request(app)
+    .get(`/api/customer/orders/${placed.body.order.id}?token=${t2.qr_token}`);
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('order status 404 for unknown order id', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app);
+  const res = await request(app)
+    .get(`/api/customer/orders/9999?token=${t.qr_token}`);
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('order status 400 without token', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/customer/orders/1');
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('order status 410 for inactive table', async () => {
+  const { app, db } = appWithDb();
+  const t = await makeTable(app, { table_number: 'T1', is_active: 0 });
+  const res = await request(app)
+    .get(`/api/customer/orders/1?token=${t.qr_token}`);
+  assert.equal(res.status, 410);
+  db.close();
+});

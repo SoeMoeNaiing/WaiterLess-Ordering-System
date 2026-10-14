@@ -15,8 +15,6 @@ function findTableByToken(db, token) {
 }
 
 function validateItems(db, items) {
-  // Returns { ok: true, resolved: [{ itemId, qty, name, price }] }
-  // or { ok: false, status, error }
   if (!Array.isArray(items) || items.length === 0) {
     return { ok: false, status: 400, error: 'items must be a non-empty array' };
   }
@@ -68,7 +66,7 @@ export function customerRouter({ db }) {
     res.type('html').send(readFileSync(CUSTOMER_HTML, 'utf8'));
   });
 
-  // GET /api/customer/menu?token=... — menu data for the table
+  // GET /api/customer/menu?token=...
   router.get('/api/customer/menu', (req, res) => {
     const { table, error } = findTableByToken(db, req.query.token);
     if (error === 'notfound') return res.status(404).json({ error: 'table not found' });
@@ -163,6 +161,41 @@ export function customerRouter({ db }) {
       .all(orderId);
 
     res.status(201).json({ order, items: orderItems });
+  });
+
+  // GET /api/customer/orders/:id?token=... — single order status
+  router.get('/api/customer/orders/:id', (req, res) => {
+    const orderId = Number(req.params.id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: 'invalid id' });
+    }
+
+    const { table, error } = findTableByToken(db, req.query.token);
+    if (error === 'notfound') return res.status(404).json({ error: 'not found' });
+    if (error === 'inactive') return res.status(410).json({ error: 'table inactive' });
+    if (error) return res.status(400).json({ error: 'token is required' });
+
+    const order = db
+      .prepare('SELECT * FROM orders WHERE id = ? AND table_id = ?')
+      .get(orderId, table.id);
+
+    if (!order) return res.status(404).json({ error: 'not found' });
+
+    const items = db
+      .prepare('SELECT id, name_snapshot, price_snapshot, qty, notes FROM order_items WHERE order_id = ? ORDER BY id')
+      .all(order.id);
+
+    res.json({
+      order: {
+        id: order.id,
+        status: order.status,
+        total: order.total,
+        notes: order.notes,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+      },
+      items,
+    });
   });
 
   return router;
