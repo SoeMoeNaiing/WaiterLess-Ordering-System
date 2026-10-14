@@ -230,7 +230,7 @@ function showConfirmation({ order, items }) {
   inner.replaceChildren();
 
   inner.appendChild(el('div', { className: 'confirmation' }, [
-    el('div', { className: 'big', text: '✓' }),
+    el('div', { className: 'big', text: 'Order placed' }),
     el('h3', { text: `Order #${order.id} placed` }),
     el('div', {
       className: 'muted',

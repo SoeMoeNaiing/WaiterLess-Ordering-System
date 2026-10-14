@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kitchen</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0; padding: 0; background: #1a1a1a; color: #eee;
+      min-height: 100vh;
+    }
+    header {
+      background: #111; padding: 0.75rem 1.5rem;
+      display: flex; align-items: center; gap: 1rem;
+      border-bottom: 2px solid #333;
+      position: sticky; top: 0; z-index: 10;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+    header .status { margin-left: auto; font-size: 0.9rem; color: #888; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      padding: 1rem;
+    }
+    .empty {
+      grid-column: 1 / -1; text-align: center; color: #666;
+      padding: 4rem 1rem; font-size: 1.2rem;
+    }
+    .card {
+      background: #222; border-radius: 10px; padding: 1rem;
+      border-left: 6px solid #198754;
+      display: flex; flex-direction: column; gap: 0.75rem;
+    }
+    .card.age-warn { border-left-color: #ffc107; }
+    .card.age-late { border-left-color: #dc3545; }
+    .card.preparing { background: #2a2a1a; }
+    .card.ready { background: #1a2a1a; }
+    .card-head {
+      display: flex; align-items: baseline; gap: 0.75rem;
+    }
+    .card-head .table { font-size: 1.5rem; font-weight: 700; }
+    .card-head .age { margin-left: auto; font-size: 0.85rem; color: #999; }
+    .card-head .order-id { font-size: 0.8rem; color: #777; }
+    .items { list-style: none; margin: 0; padding: 0; }
+    .items li {
+      display: flex; gap: 0.5rem; padding: 0.4rem 0;
+      border-bottom: 1px solid #333;
+      font-size: 1.05rem;
+    }
+    .items li:last-child { border-bottom: none; }
+    .items .qty { font-weight: 700; color: #6cbe6c; min-width: 2rem; }
+    .notes {
+      font-size: 0.9rem; color: #ffc107;
+      background: rgba(255,193,7,0.1); padding: 0.5rem; border-radius: 4px;
+    }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: auto; }
+    .actions button {
+      font: inherit; padding: 0.5rem 0.9rem; border: none; border-radius: 6px;
+      font-weight: 600; cursor: pointer; flex: 1;
+    }
+    .btn-prep { background: #ffc107; color: #000; }
+    .btn-ready { background: #17a2b8; color: #fff; }
+    .btn-serve { background: #198754; color: #fff; }
+    .btn-cancel { background: #333; color: #ccc; flex: 0; padding: 0.5rem 0.7rem; }
+    .actions button:hover { filter: brightness(1.15); }
+    .status-chip {
+      display: inline-block; font-size: 0.75rem; padding: 0.15rem 0.5rem;
+      border-radius: 999px; background: #333; color: #aaa;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Kitchen</h1>
+    <span class="status" id="status">loading…</span>
+  </header>
+  <div class="board" id="board">
+    <div class="empty">loading orders…</div>
+  </div>
+  <script src="/kitchen/kitchen.js"></script>
+</body>
+</html>

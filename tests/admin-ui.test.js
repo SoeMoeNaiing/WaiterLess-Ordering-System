@@ -45,3 +45,18 @@ test('GET /admin/placeholder.svg returns SVG', async () => {
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /svg/);
 });
+
+test('GET /kitchen/ returns the kitchen HTML page', async () => {
+  const app = createApp();
+  const res = await request(app).get('/kitchen/');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /^text\/html/);
+  assert.match(res.text, /Kitchen/);
+});
+
+test('GET /kitchen/kitchen.js returns JavaScript', async () => {
+  const app = createApp();
+  const res = await request(app).get('/kitchen/kitchen.js');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /javascript/);
+});
