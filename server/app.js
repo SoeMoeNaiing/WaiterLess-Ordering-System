@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { lanOnly } from './middleware/lanOnly.js';
+import { adminTablesRouter } from './routes/admin.tables.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
@@ -11,27 +12,26 @@ export function createApp({ db } = {}) {
   app.use(lanOnly(LAN_PREFIX));
 
   app.get('/health', (req, res) => {
-    let dbStatus = 'unavailable';
-    try {
-      if (db) {
+    if (db) {
+      try {
         db.prepare('SELECT 1').get();
-        dbStatus = 'connected';
+      } catch {
+        return res.status(500).json({
+          ok: false, db: 'error', time: new Date().toISOString(),
+        });
       }
-    } catch {
-      dbStatus = 'error';
-      return res.status(500).json({
-        ok: false,
-        db: dbStatus,
-        time: new Date().toISOString(),
-      });
     }
 
     res.json({
       ok: true,
-      db: dbStatus,
+      db: db ? 'connected' : 'unavailable',
       time: new Date().toISOString(),
     });
   });
+
+  if (db) {
+    app.use('/api/admin/tables', adminTablesRouter({ db }));
+  }
 
   return app;
 }
