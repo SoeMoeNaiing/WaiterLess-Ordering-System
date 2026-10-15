@@ -8,7 +8,8 @@
 </head>
 <body>
 
-  <!-- ============ LOGIN ============ -->
+  <div id="toast-container"></div>
+
   <section id="login-view">
     <h1>Admin</h1>
     <p>Enter the admin PIN</p>
@@ -17,9 +18,7 @@
     <div id="pin-error" class="error"></div>
   </section>
 
-  <!-- ============ APP ============ -->
   <section id="app-view">
-
     <header class="topbar">
       <button class="menu-toggle" id="menu-toggle">☰</button>
       <div class="brand">
@@ -35,7 +34,8 @@
         <button class="tab" data-tab="dashboard">Dashboard</button>
         <button class="tab" data-tab="tables">Tables</button>
         <button class="tab" data-tab="menu">Menu</button>
-        <button class="tab" data-tab="orders">Orders</button>
+        <button class="tab" data-tab="live">Live orders</button>
+        <button class="tab" data-tab="orders">Order history</button>
         <button class="tab" data-tab="settings">Settings</button>
       </nav>
     </aside>
@@ -43,7 +43,7 @@
     <main class="content">
       <h1 class="page-title" id="page-title">Dashboard</h1>
 
-      <!-- ============ PANEL: DASHBOARD ============ -->
+      <!-- DASHBOARD -->
       <section class="panel" data-panel="dashboard">
         <div class="stats">
           <div class="stat">
@@ -63,14 +63,13 @@
             <div class="lbl">Avg order</div>
           </div>
         </div>
-
         <div class="card">
           <h2>Top items today</h2>
           <div id="dash-top"><p class="muted">loading…</p></div>
         </div>
       </section>
 
-      <!-- ============ PANEL: TABLES ============ -->
+      <!-- TABLES -->
       <section class="panel" data-panel="tables">
         <div class="card">
           <h2>Add table</h2>
@@ -81,7 +80,6 @@
           </div>
           <p id="add-error" class="error"></p>
         </div>
-
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
             <h2 style="margin:0;">Tables</h2>
@@ -91,7 +89,7 @@
         </div>
       </section>
 
-      <!-- ============ PANEL: MENU ============ -->
+      <!-- MENU -->
       <section class="panel" data-panel="menu">
         <div class="card">
           <h2>Categories</h2>
@@ -103,7 +101,6 @@
           <p id="add-category-error" class="error"></p>
           <div id="categories"><p class="muted">loading…</p></div>
         </div>
-
         <div class="card">
           <h2>Menu items</h2>
           <div class="form-row">
@@ -118,7 +115,16 @@
         </div>
       </section>
 
-      <!-- ============ PANEL: ORDERS ============ -->
+      <!-- LIVE ORDERS -->
+      <section class="panel" data-panel="live">
+        <div class="card">
+          <h2>Live orders</h2>
+          <p class="muted">Same actions as the kitchen display — confirm, mark served, or reject.</p>
+          <div id="live-list"><p class="muted">loading…</p></div>
+        </div>
+      </section>
+
+      <!-- ORDER HISTORY -->
       <section class="panel" data-panel="orders">
         <div class="card">
           <h2>Order history</h2>
@@ -126,14 +132,21 @@
             <button id="hist-today">Today</button>
             <button id="hist-week">Last 7 days</button>
             <button id="hist-month">Last 30 days</button>
-            <button id="hist-all">All</button>
+            <button id="hist-all">All time</button>
           </div>
-          <p class="muted" id="hist-summary">Pick a range.</p>
+          <div class="form-row">
+            <label style="align-self:center; color:#666; font-size:0.9rem;">From</label>
+            <input id="hist-from" type="date" style="flex:0 0 auto;" />
+            <label style="align-self:center; color:#666; font-size:0.9rem;">To</label>
+            <input id="hist-to" type="date" style="flex:0 0 auto;" />
+            <button id="hist-apply" class="primary">Apply</button>
+          </div>
+          <p class="muted" id="hist-summary">loading…</p>
           <div id="hist-list"></div>
         </div>
       </section>
 
-      <!-- ============ PANEL: SETTINGS ============ -->
+      <!-- SETTINGS -->
       <section class="panel" data-panel="settings">
         <div class="card">
           <h2>Restaurant settings</h2>
@@ -147,11 +160,9 @@
           </div>
           <p id="settings-message" class="muted" style="min-height: 1.2rem;"></p>
         </div>
-
         <div class="card">
           <h2>Security</h2>
           <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
-
           <div class="form-row" style="margin-top: 0.75rem;">
             <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
           </div>
@@ -170,6 +181,6 @@
     </main>
   </section>
 
-  <script src="/admin/app.js"></script>
+  <script src="/admin/app.js?v=5"></script>
 </body>
 </html>

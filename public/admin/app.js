@@ -1,5 +1,21 @@
 const $ = (id) => document.getElementById(id);
 
+// ---------- Toast ----------
+
+function toast(message, kind = 'info') {
+  const container = $('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind}`;
+  el.textContent = message;
+  container.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('toast-show'));
+  setTimeout(() => {
+    el.classList.remove('toast-show');
+    setTimeout(() => el.remove(), 250);
+  }, 2800);
+}
+
 // ---------- Helpers ----------
 
 async function api(path, opts = {}) {
@@ -77,32 +93,6 @@ async function logout() {
   showLogin();
 }
 
-// ---------- Tabs ----------
-
-const PAGE_TITLES = {
-  dashboard: 'Dashboard',
-  tables: 'Tables',
-  menu: 'Menu',
-  orders: 'Orders',
-  settings: 'Settings',
-};
-
-function showTab(name) {
-  document.querySelectorAll('.tab').forEach((t) => {
-    t.classList.toggle('active', t.dataset.tab === name);
-  });
-  document.querySelectorAll('.panel').forEach((p) => {
-    p.classList.toggle('active', p.dataset.panel === name);
-  });
-  const title = $('page-title');
-  if (title) title.textContent = PAGE_TITLES[name] || name;
-  if (window.location.hash !== '#' + name) {
-    history.replaceState(null, '', '#' + name);
-  }
-  const sb = $('sidebar');
-  if (sb) sb.classList.remove('open');
-}
-
 // ---------- Tables ----------
 
 async function refresh() {
@@ -142,8 +132,11 @@ function renderTable(t) {
     text: 'Regenerate QR',
     onclick: async () => {
       if (!confirm(`Regenerate QR for ${t.table_number}? The old QR code will stop working.`)) return;
-      await api(`/api/admin/tables/${t.id}/regenerate-token`, { method: 'POST' });
-      await refresh();
+      try {
+        await api(`/api/admin/tables/${t.id}/regenerate-token`, { method: 'POST' });
+        toast('QR regenerated', 'success');
+        await refresh();
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
@@ -152,11 +145,14 @@ function renderTable(t) {
     className: t.is_active ? 'danger' : '',
     onclick: async () => {
       if (t.is_active && !confirm(`Deactivate ${t.table_number}?`)) return;
-      await api(`/api/admin/tables/${t.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ is_active: t.is_active ? 0 : 1 }),
-      });
-      await refresh();
+      try {
+        await api(`/api/admin/tables/${t.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ is_active: t.is_active ? 0 : 1 }),
+        });
+        toast(t.is_active ? 'Table deactivated' : 'Table reactivated', 'success');
+        await refresh();
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
@@ -164,19 +160,15 @@ function renderTable(t) {
     text: 'Clear session',
     onclick: async () => {
       if (!confirm(`Clear session for ${t.table_number}? Customer will no longer see previous orders.`)) return;
-      const res = await api(`/api/admin/tables/${t.id}/clear-session`, { method: 'POST' });
-
-      if (res.in_progress_count > 0) {
-        alert(
-          `Cleared ${res.cleared} order(s).\n\n` +
-          `Warning: ${res.in_progress_count} order(s) are still in the kitchen. ` +
-          `The customer can no longer see them on their status page. ` +
-          `If you want them visible to the customer, do not clear the session until they are served.`
-        );
-      } else {
-        alert(`Cleared ${res.cleared} order(s).`);
-      }
-      await refresh();
+      try {
+        const res = await api(`/api/admin/tables/${t.id}/clear-session`, { method: 'POST' });
+        if (res.in_progress_count > 0) {
+          toast(`Cleared ${res.cleared}. Warning: ${res.in_progress_count} order(s) still in kitchen.`, 'warn');
+        } else {
+          toast(`Cleared ${res.cleared} order(s)`, 'success');
+        }
+        await refresh();
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
@@ -198,6 +190,7 @@ $('add-table').onclick = async () => {
       method: 'POST',
       body: JSON.stringify({ table_number, label: label || undefined }),
     });
+    toast(`Table "${table_number}" added`, 'success');
     $('new-table-number').value = '';
     $('new-table-label').value = '';
     await refresh();
@@ -228,14 +221,17 @@ function renderCategory(c) {
   const save = el('button', {
     text: 'Save',
     onclick: async () => {
-      await api(`/api/admin/categories/${c.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: name.value.trim(),
-          sort_order: Number(order.value) || 0,
-        }),
-      });
-      await refreshCategories();
+      try {
+        await api(`/api/admin/categories/${c.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: name.value.trim(),
+            sort_order: Number(order.value) || 0,
+          }),
+        });
+        toast('Category saved', 'success');
+        await Promise.all([refreshCategories(), refreshMenuItems()]);
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
@@ -244,8 +240,11 @@ function renderCategory(c) {
     className: 'danger',
     onclick: async () => {
       if (!confirm(`Delete "${c.name}"? Items in it will become uncategorized.`)) return;
-      await api(`/api/admin/categories/${c.id}`, { method: 'DELETE' });
-      await refreshCategories();
+      try {
+        await api(`/api/admin/categories/${c.id}`, { method: 'DELETE' });
+        toast('Category deleted', 'success');
+        await Promise.all([refreshCategories(), refreshMenuItems()]);
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
@@ -270,9 +269,10 @@ $('add-category').onclick = async () => {
       method: 'POST',
       body: JSON.stringify({ name, sort_order }),
     });
+    toast(`Category "${name}" added`, 'success');
     $('new-category-name').value = '';
     $('new-category-order').value = '0';
-    await refreshCategories();
+    await Promise.all([refreshCategories(), refreshMenuItems()]);
   } catch (e) {
     if (e.message !== 'unauthorized') $('add-category-error').textContent = e.message;
   }
@@ -287,12 +287,15 @@ async function refreshMenuItems() {
   ]);
 
   const newSelect = $('new-item-category');
-  newSelect.replaceChildren(el('option', { value: '', text: 'Uncategorized' }));
-  for (const c of cats) {
-    newSelect.appendChild(el('option', { value: String(c.id), text: c.name }));
+  if (newSelect) {
+    newSelect.replaceChildren(el('option', { value: '', text: 'Uncategorized' }));
+    for (const c of cats) {
+      newSelect.appendChild(el('option', { value: String(c.id), text: c.name }));
+    }
   }
 
   const root = $('menu-items');
+  if (!root) return;
   root.replaceChildren();
 
   if (items.length === 0) {
@@ -319,18 +322,21 @@ function renderMenuItem(item, cats) {
   upload.onchange = async () => {
     const f = upload.files[0];
     if (!f) return;
-    const fd = new FormData();
-    fd.append('file', f);
-    const up = await fetch('/api/admin/upload', { method: 'POST', body: fd }).then(async (r) => {
-      if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
-      if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
-      return r.json();
-    });
-    await api(`/api/admin/menu-items/${item.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ image_path: up.path }),
-    });
-    await refreshMenuItems();
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const up = await fetch('/api/admin/upload', { method: 'POST', body: fd }).then(async (r) => {
+        if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+        if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
+        return r.json();
+      });
+      await api(`/api/admin/menu-items/${item.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ image_path: up.path }),
+      });
+      toast('Image updated', 'success');
+      await refreshMenuItems();
+    } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
   };
   const uploadBtn = el('button', { text: 'Image…', onclick: () => upload.click() });
 
@@ -346,26 +352,32 @@ function renderMenuItem(item, cats) {
   const save = el('button', {
     text: 'Save',
     onclick: async () => {
-      await api(`/api/admin/menu-items/${item.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: name.value.trim(),
-          price: Number(price.value),
-          category_id: cat.value === '' ? null : Number(cat.value),
-        }),
-      });
-      await refreshMenuItems();
+      try {
+        await api(`/api/admin/menu-items/${item.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: name.value.trim(),
+            price: Number(price.value),
+            category_id: cat.value === '' ? null : Number(cat.value),
+          }),
+        });
+        toast('Item saved', 'success');
+        await refreshMenuItems();
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
   const avail = el('button', {
     text: item.is_available ? 'Mark unavailable' : 'Mark available',
     onclick: async () => {
-      await api(`/api/admin/menu-items/${item.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ is_available: item.is_available ? 0 : 1 }),
-      });
-      await refreshMenuItems();
+      try {
+        await api(`/api/admin/menu-items/${item.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ is_available: item.is_available ? 0 : 1 }),
+        });
+        toast(item.is_available ? 'Marked unavailable' : 'Marked available', 'success');
+        await refreshMenuItems();
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
@@ -374,8 +386,11 @@ function renderMenuItem(item, cats) {
     className: 'danger',
     onclick: async () => {
       if (!confirm(`Delete "${item.name}"? Order history will keep the price.`)) return;
-      await api(`/api/admin/menu-items/${item.id}`, { method: 'DELETE' });
-      await refreshMenuItems();
+      try {
+        await api(`/api/admin/menu-items/${item.id}`, { method: 'DELETE' });
+        toast('Item deleted', 'success');
+        await refreshMenuItems();
+      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
@@ -427,6 +442,7 @@ $('add-item').onclick = async () => {
         image_path,
       }),
     });
+    toast(`Item "${name}" added`, 'success');
     $('new-item-name').value = '';
     $('new-item-price').value = '';
     fileInput.value = '';
@@ -465,23 +481,103 @@ async function refreshDashboard() {
   }
 }
 
+// ---------- Live orders ----------
+
+async function refreshLive() {
+  const root = $('live-list');
+  if (!root) return;
+  try {
+    const res = await fetch('/api/kitchen/orders');
+    if (res.status === 401) return;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const orders = await res.json();
+
+    root.replaceChildren();
+
+    if (orders.length === 0) {
+      root.appendChild(el('p', { className: 'muted', text: 'No active orders.' }));
+      return;
+    }
+
+    for (const o of orders) {
+      const info = el('div', { className: 'info' }, [
+        el('div', { className: 'num' }, [
+          `#${o.id} — Table ${o.table_number}`,
+          el('span', {
+            className: `badge ${o.status === 'preparing' ? 'warn' : o.status === 'ready' ? 'on' : 'idle'}`,
+            text: o.status,
+          }),
+        ]),
+        el('div', { className: 'label' }, o.items.map((it) => `${it.qty}× ${it.name_snapshot}`).join(', ')),
+      ]);
+
+      const actions = el('div', { className: 'actions' });
+
+      if (o.status === 'placed') {
+        actions.appendChild(el('button', {
+          className: 'primary', text: 'Confirm',
+          onclick: async () => {
+            try {
+              await api(`/api/kitchen/orders/${o.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'preparing' }) });
+              toast(`Order #${o.id} confirmed`, 'success');
+              refreshLive();
+            } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+          },
+        }));
+      }
+      if (o.status === 'preparing' || o.status === 'ready') {
+        actions.appendChild(el('button', {
+          className: 'primary', text: 'Mark served',
+          onclick: async () => {
+            try {
+              await api(`/api/kitchen/orders/${o.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'served' }) });
+              toast(`Order #${o.id} served`, 'success');
+              refreshLive();
+            } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+          },
+        }));
+      }
+
+      actions.appendChild(el('button', {
+        text: 'Reject', className: 'danger',
+        onclick: async () => {
+          if (!confirm(`Reject order #${o.id}?`)) return;
+          try {
+            await api(`/api/kitchen/orders/${o.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
+            toast(`Order #${o.id} rejected`, 'warn');
+            refreshLive();
+          } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+        },
+      }));
+
+      root.appendChild(el('div', { className: 'row' }, [info, actions]));
+    }
+  } catch (e) {
+    if (e.message !== 'unauthorized') {
+      root.replaceChildren(el('p', { className: 'error', text: 'Error: ' + e.message }));
+    }
+  }
+}
+
 // ---------- Order history ----------
 
-async function loadHistory(range) {
-  const now = new Date();
-  let from = '';
-  if (range === 'today') from = now.toLocaleDateString('en-CA');
-  else if (range === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); from = d.toLocaleDateString('en-CA'); }
-  else if (range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 30); from = d.toLocaleDateString('en-CA'); }
+function ymd(date) {
+  return date.toLocaleDateString('en-CA');
+}
 
-  const url = from ? `/api/admin/orders?from=${from}&limit=200` : '/api/admin/orders?limit=200';
+async function loadHistory(from, to) {
   const msg = $('hist-summary');
   const root = $('hist-list');
   msg.textContent = 'loading…';
   root.replaceChildren();
 
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  params.set('limit', '500');
+
   try {
-    const data = await api(url);
+    const data = await api(`/api/admin/orders?${params.toString()}`);
     msg.textContent = `${data.total_count} order(s) — total ${data.total_sum.toFixed(2)}`;
 
     if (data.orders.length === 0) {
@@ -497,7 +593,7 @@ async function loadHistory(range) {
         el('div', { className: 'info' }, [
           el('div', { className: 'num' }, [
             `#${o.id} — Table ${o.table_number}`,
-            el('span', { className: `badge ${o.status === 'served' ? 'on' : 'off'}`, text: o.status }),
+            el('span', { className: `badge ${o.status === 'served' ? 'on' : o.status === 'cancelled' ? 'off' : 'idle'}`, text: o.status }),
           ]),
           el('div', { className: 'label', text: o.created_at }),
           items,
@@ -509,6 +605,48 @@ async function loadHistory(range) {
     if (e.message === 'unauthorized') return;
     msg.textContent = 'error: ' + e.message;
   }
+}
+
+function wireHistory() {
+  const todayBtn = $('hist-today');
+  if (!todayBtn) return;
+
+  const today = new Date();
+  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+  const monthAgo = new Date(today); monthAgo.setDate(today.getDate() - 30);
+
+  const setDates = (from, to) => {
+    $('hist-from').value = from || '';
+    $('hist-to').value = to || '';
+  };
+
+  todayBtn.onclick = () => {
+    const t = ymd(today);
+    setDates(t, t);
+    loadHistory(t, t);
+  };
+  $('hist-week').onclick = () => {
+    const from = ymd(weekAgo), to = ymd(today);
+    setDates(from, to);
+    loadHistory(from, to);
+  };
+  $('hist-month').onclick = () => {
+    const from = ymd(monthAgo), to = ymd(today);
+    setDates(from, to);
+    loadHistory(from, to);
+  };
+  $('hist-all').onclick = () => {
+    setDates('', '');
+    loadHistory('', '');
+  };
+  $('hist-apply').onclick = () => {
+    loadHistory($('hist-from').value, $('hist-to').value);
+  };
+
+  // Default: load today on first view
+  const t = ymd(today);
+  setDates(t, t);
+  loadHistory(t, t);
 }
 
 // ---------- Settings ----------
@@ -544,12 +682,14 @@ async function saveSettings() {
     });
     msg.textContent = 'Settings saved.';
     msg.style.color = '#155724';
+    toast('Settings saved', 'success');
     const brand = $('brand-name');
     if (brand) brand.textContent = payload.restaurant_name || 'Restaurant';
   } catch (e) {
     if (e.message === 'unauthorized') return;
     msg.textContent = e.message;
     msg.style.color = '#b02a37';
+    toast(e.message, 'error');
   }
 }
 
@@ -574,11 +714,41 @@ async function changePin(target) {
     $('new-kitchen-pin').value = '';
     msg.textContent = `${target} PIN changed.`;
     msg.style.color = '#155724';
+    toast(`${target} PIN changed`, 'success');
   } catch (e) {
     if (e.message === 'unauthorized') return;
     msg.textContent = e.message;
     msg.style.color = '#b02a37';
+    toast(e.message, 'error');
   }
+}
+
+// ---------- Tabs ----------
+
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  tables: 'Tables',
+  menu: 'Menu',
+  live: 'Live orders',
+  orders: 'Orders',
+  settings: 'Settings',
+};
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === name);
+  });
+  document.querySelectorAll('.panel').forEach((p) => {
+    p.classList.toggle('active', p.dataset.panel === name);
+  });
+  const title = $('page-title');
+  if (title) title.textContent = PAGE_TITLES[name] || name;
+  if (window.location.hash !== '#' + name) {
+    history.replaceState(null, '', '#' + name);
+  }
+  const sb = $('sidebar');
+  if (sb) sb.classList.remove('open');
+  if (name === 'live') refreshLive();
 }
 
 // ---------- Boot ----------
@@ -610,13 +780,6 @@ function wireButtons() {
   if (btnKitchenPin) btnKitchenPin.onclick = () => changePin('kitchen');
   const btnSaveSettings = $('save-settings');
   if (btnSaveSettings) btnSaveSettings.onclick = saveSettings;
-
-  if ($('hist-today')) {
-    $('hist-today').onclick = () => loadHistory('today');
-    $('hist-week').onclick = () => loadHistory('week');
-    $('hist-month').onclick = () => loadHistory('month');
-    $('hist-all').onclick = () => loadHistory('all');
-  }
 }
 
 async function loadApp() {
@@ -628,9 +791,11 @@ async function loadApp() {
       refreshSettings(),
       refreshDashboard(),
     ]);
+    wireHistory();
   } catch (e) {
     if (e.message !== 'unauthorized') {
       console.error('loadApp error', e);
+      toast('Failed to load: ' + e.message, 'error');
     }
   }
 }
@@ -646,6 +811,11 @@ async function boot() {
   } else {
     showLogin();
   }
+
+  setInterval(() => {
+    const active = document.querySelector('.tab.active');
+    if (active && active.dataset.tab === 'live') refreshLive();
+  }, 5000);
 }
 
 boot();
