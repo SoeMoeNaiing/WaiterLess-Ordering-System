@@ -402,3 +402,76 @@ test('GET /api/admin/orders respects date range', async () => {
   assert.equal(outOfRange.body.total_count, 0);
   db.close();
 });
+
+// ---------- Dashboard ----------
+
+test('GET /api/admin/dashboard returns zeros on empty DB', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app).get('/api/admin/dashboard').set('Cookie', cookie);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.orders_completed, 0);
+  assert.equal(res.body.sales_completed, 0);
+  assert.equal(res.body.top_items.length, 0);
+  db.close();
+});
+
+test('GET /api/admin/dashboard counts served and in-progress separately', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  const cat = await agent.post('/api/admin/categories').send({ name: 'C' });
+  const item = await agent.post('/api/admin/menu-items').send({ name: 'X', price: 5, category_id: cat.body.id });
+
+  // Place 2 orders
+  await request(app).post('/api/customer/orders').send({ token: t.body.qr_token, items: [{ itemId: item.body.id, qty: 1 }] });
+  const o2 = await request(app).post('/api/customer/orders').send({ token: t.body.qr_token, items: [{ itemId: item.body.id, qty: 2 }] });
+
+  // Mark o2 served
+  await agent.patch(`/api/kitchen/orders/${o2.body.order.id}`).send({ status: 'served' });
+
+  const res = await request(app).get('/api/admin/dashboard').set('Cookie', cookie);
+  assert.equal(res.body.orders_completed, 1);
+  assert.equal(res.body.orders_in_progress, 1);
+  assert.equal(res.body.sales_completed, 10);
+  assert.equal(res.body.sales_all_active, 15);
+  db.close();
+});
+
+test('GET /api/admin/dashboard includes top items', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  const cat = await agent.post('/api/admin/categories').send({ name: 'C' });
+  const item = await agent.post('/api/admin/menu-items').send({ name: 'Fries', price: 3, category_id: cat.body.id });
+
+  await request(app).post('/api/customer/orders').send({ token: t.body.qr_token, items: [{ itemId: item.body.id, qty: 4 }] });
+
+  const res = await request(app).get('/api/admin/dashboard').set('Cookie', cookie);
+  assert.equal(res.body.top_items.length, 1);
+  assert.equal(res.body.top_items[0].name, 'Fries');
+  assert.equal(res.body.top_items[0].qty, 4);
+  assert.equal(res.body.top_items[0].revenue, 12);
+  db.close();
+});
+
+test('GET /api/admin/dashboard requires auth', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/admin/dashboard');
+  assert.equal(res.status, 401);
+  db.close();
+});
+
+test('GET /api/admin/dashboard rejects bad date', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app).get('/api/admin/dashboard?date=nope').set('Cookie', cookie);
+  assert.equal(res.status, 400);
+  db.close();
+});

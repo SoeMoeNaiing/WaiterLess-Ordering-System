@@ -75,12 +75,36 @@
 
   <!-- Main app view -->
   <section id="app-view">
+
     <div class="app-header">
       <h1>Admin</h1>
       <button id="logout-btn" class="danger">Log out</button>
     </div>
 
     <p class="muted" id="status">loading…</p>
+        <div class="card">
+      <h2>Dashboard — today</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+        <div style="text-align: center;">
+          <div style="font-size: 2rem; font-weight: 700; color: #0a58ca;" id="dash-completed">—</div>
+          <div class="muted">Served</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-size: 2rem; font-weight: 700; color: #ffc107;" id="dash-progress">—</div>
+          <div class="muted">In progress</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-size: 2rem; font-weight: 700; color: #198754;" id="dash-sales">—</div>
+          <div class="muted">Sales</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-size: 2rem; font-weight: 700; color: #666;" id="dash-avg">—</div>
+          <div class="muted">Avg order</div>
+        </div>
+      </div>
+      <h2 style="margin-top: 1rem;">Top items today</h2>
+      <div id="dash-top"><p class="muted">loading…</p></div>
+    </div>
 
     <div class="card">
       <h2>Add table</h2>

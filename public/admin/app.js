@@ -400,6 +400,34 @@ $('add-item').onclick = async () => {
     if (e.message !== 'unauthorized') $('add-item-error').textContent = e.message;
   }
 };
+// ---------- Dashboard ----------
+
+async function refreshDashboard() {
+  try {
+    const d = await api('/api/admin/dashboard');
+    $('dash-completed').textContent = d.orders_completed;
+    $('dash-progress').textContent = d.orders_in_progress;
+    $('dash-sales').textContent = d.sales_completed.toFixed(2);
+    $('dash-avg').textContent = d.avg_order_value.toFixed(2);
+
+    const root = $('dash-top');
+    root.replaceChildren();
+    if (d.top_items.length === 0) {
+      root.appendChild(el('p', { className: 'muted', text: 'No items sold yet today.' }));
+    } else {
+      for (const it of d.top_items) {
+        root.appendChild(el('div', { className: 'row' }, [
+          el('div', { className: 'info' }, [
+            el('div', { className: 'num', text: it.name }),
+          ]),
+          el('div', { text: `${it.qty}× — ${it.revenue.toFixed(2)}` }),
+        ]));
+      }
+    }
+  } catch (e) {
+    if (e.message !== 'unauthorized') console.warn('dashboard failed', e);
+  }
+}
 // ---------- Order history ----------
 
 async function loadHistory(range) {
@@ -533,7 +561,7 @@ if (btnSaveSettings) btnSaveSettings.onclick = saveSettings;
 async function loadApp() {
   $('status').textContent = 'loading…';
   try {
-    await Promise.all([refresh(), refreshCategories(), refreshMenuItems(), refreshSettings()]);
+   await Promise.all([refresh(), refreshCategories(), refreshMenuItems(), refreshSettings(), refreshDashboard()]);
   } catch (e) {
     if (e.message !== 'unauthorized') {
       $('status').textContent = 'error loading: ' + e.message;

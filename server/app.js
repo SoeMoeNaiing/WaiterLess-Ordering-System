@@ -11,6 +11,7 @@ import { adminMenuItemsRouter } from './routes/admin.menu-items.js';
 import { adminUploadRouter } from './routes/admin.upload.js';
 import { adminSettingsRouter } from './routes/admin.settings.js';
 import { adminOrdersRouter } from './routes/admin.orders.js';
+import { adminDashboardRouter } from './routes/admin.dashboard.js';
 import { publicSettingsRouter } from './routes/public.settings.js';
 import { customerRouter } from './routes/customer.js';
 import { kitchenRouter } from './routes/kitchen.js';
@@ -54,6 +55,7 @@ export function createApp({ db } = {}) {
     app.use('/api/admin/upload', requireAdmin, adminUploadRouter());
     app.use('/api/admin/settings', requireAdmin, adminSettingsRouter({ db }));
     app.use('/api/admin/orders', requireAdmin, adminOrdersRouter({ db }));
+    app.use('/api/admin/dashboard', requireAdmin, adminDashboardRouter({ db }));
 
     app.use(customerRouter({ db }));
   }
