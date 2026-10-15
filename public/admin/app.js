@@ -135,7 +135,17 @@ function renderTable(t) {
     },
   });
 
-  return el('div', { className: 'row' }, [img, info, el('div', { className: 'actions' }, [regen, toggle])]);
+    const clear = el('button', {
+    text: 'Clear session',
+    onclick: async () => {
+      if (!confirm(`Clear session for ${t.table_number}? Customer will no longer see previous orders.`)) return;
+      const res = await api(`/api/admin/tables/${t.id}/clear-session`, { method: 'POST' });
+      alert(`Cleared ${res.cleared} order(s).`);
+      await refresh();
+    },
+  });
+
+  return el('div', { className: 'row' }, [img, info, el('div', { className: 'actions' }, [regen, toggle, clear])]);
 }
 
 $('add-table').onclick = async () => {
@@ -390,7 +400,43 @@ $('add-item').onclick = async () => {
     if (e.message !== 'unauthorized') $('add-item-error').textContent = e.message;
   }
 };
+// ---------- Settings ----------
 
+async function refreshSettings() {
+  try {
+    const s = await api('/api/admin/settings');
+    $('setting-restaurant-name').value = s.restaurant_name || '';
+    $('setting-currency').value = s.currency || '';
+    $('setting-default-language').value = s.default_language || '';
+  } catch (e) {
+    if (e.message !== 'unauthorized') console.warn('settings load failed', e);
+  }
+}
+
+async function saveSettings() {
+  const msg = $('settings-message');
+  msg.textContent = '';
+  msg.style.color = '#888';
+
+  const payload = {
+    restaurant_name: $('setting-restaurant-name').value.trim(),
+    currency: $('setting-currency').value.trim(),
+    default_language: $('setting-default-language').value.trim(),
+  };
+
+  try {
+    await api('/api/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    msg.textContent = 'Settings saved.';
+    msg.style.color = '#155724';
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    msg.textContent = e.message;
+    msg.style.color = '#b02a37';
+  }
+}
 // ---------- Security ----------
 
 async function changePin(target) {
@@ -429,11 +475,13 @@ const btnAdminPin = $('change-admin-pin');
 if (btnAdminPin) btnAdminPin.onclick = () => changePin('admin');
 const btnKitchenPin = $('change-kitchen-pin');
 if (btnKitchenPin) btnKitchenPin.onclick = () => changePin('kitchen');
+const btnSaveSettings = $('save-settings');
+if (btnSaveSettings) btnSaveSettings.onclick = saveSettings;
 
 async function loadApp() {
   $('status').textContent = 'loading…';
   try {
-    await Promise.all([refresh(), refreshCategories(), refreshMenuItems()]);
+    await Promise.all([refresh(), refreshCategories(), refreshMenuItems(), refreshSettings()]);
   } catch (e) {
     if (e.message !== 'unauthorized') {
       $('status').textContent = 'error loading: ' + e.message;

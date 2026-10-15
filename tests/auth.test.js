@@ -272,3 +272,63 @@ test('change PIN requires authentication', async () => {
   assert.equal(res.status, 401);
   db.close();
 });
+
+// ---------- Settings ----------
+
+test('GET /api/admin/settings returns current settings', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app).get('/api/admin/settings').set('Cookie', cookie);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.restaurant_name, 'My Restaurant');
+  assert.equal(res.body.currency, 'MMK');
+  assert.equal(res.body.default_language, 'en');
+  db.close();
+});
+
+test('PUT /api/admin/settings updates a value', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app)
+    .put('/api/admin/settings')
+    .set('Cookie', cookie)
+    .send({ restaurant_name: 'Golden Duck' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.restaurant_name, 'Golden Duck');
+  db.close();
+});
+
+test('PUT /api/admin/settings rejects non-whitelisted key', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app)
+    .put('/api/admin/settings')
+    .set('Cookie', cookie)
+    .send({ admin_pin: '9999' });
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('PUT /api/admin/settings requires auth', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).put('/api/admin/settings').send({ currency: 'USD' });
+  assert.equal(res.status, 401);
+  db.close();
+});
+
+test('GET /api/public/settings returns restaurant_name without auth', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/public/settings');
+  assert.equal(res.status, 200);
+  assert.ok('restaurant_name' in res.body);
+  db.close();
+});
+
+test('GET /api/public/settings does not leak admin_pin', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/public/settings');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.admin_pin, undefined);
+  assert.equal(res.body.kitchen_pin, undefined);
+  db.close();
+});
