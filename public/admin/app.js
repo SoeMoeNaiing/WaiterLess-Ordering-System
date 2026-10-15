@@ -400,6 +400,58 @@ $('add-item').onclick = async () => {
     if (e.message !== 'unauthorized') $('add-item-error').textContent = e.message;
   }
 };
+// ---------- Order history ----------
+
+async function loadHistory(range) {
+  const now = new Date();
+  let from = '';
+  if (range === 'today') from = now.toISOString().slice(0, 10);
+  else if (range === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); from = d.toISOString().slice(0, 10); }
+  else if (range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 30); from = d.toISOString().slice(0, 10); }
+
+  const url = from ? `/api/admin/orders?from=${from}&limit=200` : '/api/admin/orders?limit=200';
+  const msg = $('hist-summary');
+  const root = $('hist-list');
+  msg.textContent = 'loading…';
+  root.replaceChildren();
+
+  try {
+    const data = await api(url);
+    msg.textContent = `${data.total_count} order(s) — total ${data.total_sum.toFixed(2)}`;
+
+    if (data.orders.length === 0) {
+      root.appendChild(el('p', { className: 'muted', text: 'No orders in this range.' }));
+      return;
+    }
+
+    for (const o of data.orders) {
+      const items = el('div', { className: 'muted' },
+        o.items.map((it) => el('div', { text: `${it.qty}× ${it.name_snapshot} — ${(it.price_snapshot * it.qty).toFixed(2)}` }))
+      );
+      root.appendChild(el('div', { className: 'row' }, [
+        el('div', { className: 'info' }, [
+          el('div', { className: 'num' }, [
+            `#${o.id} — Table ${o.table_number}`,
+            el('span', { className: `badge ${o.status === 'served' ? 'on' : 'off'}`, text: o.status }),
+          ]),
+          el('div', { className: 'label', text: o.created_at }),
+          items,
+        ]),
+        el('div', { style: 'text-align:right; font-weight:600;' , text: o.total.toFixed(2) }),
+      ]));
+    }
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    msg.textContent = 'error: ' + e.message;
+  }
+}
+
+if ($('hist-today')) {
+  $('hist-today').onclick = () => loadHistory('today');
+  $('hist-week').onclick = () => loadHistory('week');
+  $('hist-month').onclick = () => loadHistory('month');
+  $('hist-all').onclick = () => loadHistory('all');
+}
 // ---------- Settings ----------
 
 async function refreshSettings() {

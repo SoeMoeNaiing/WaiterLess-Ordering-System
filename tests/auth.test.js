@@ -332,3 +332,73 @@ test('GET /api/public/settings does not leak admin_pin', async () => {
   assert.equal(res.body.kitchen_pin, undefined);
   db.close();
 });
+
+// ---------- Order history ----------
+
+test('GET /api/admin/orders returns empty history', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app).get('/api/admin/orders').set('Cookie', cookie);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.total_count, 0);
+  assert.equal(res.body.total_sum, 0);
+  assert.deepEqual(res.body.orders, []);
+  db.close();
+});
+
+test('GET /api/admin/orders returns orders with items', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  const cat = await agent.post('/api/admin/categories').send({ name: 'C' });
+  const item = await agent.post('/api/admin/menu-items').send({ name: 'X', price: 4.5, category_id: cat.body.id });
+
+  await request(app).post('/api/customer/orders').send({
+    token: t.body.qr_token,
+    items: [{ itemId: item.body.id, qty: 2 }],
+  });
+
+  const res = await request(app).get('/api/admin/orders').set('Cookie', cookie);
+  assert.equal(res.body.total_count, 1);
+  assert.equal(res.body.total_sum, 9.0);
+  assert.equal(res.body.orders[0].table_number, 'T1');
+  assert.equal(res.body.orders[0].items.length, 1);
+  assert.equal(res.body.orders[0].items[0].qty, 2);
+  db.close();
+});
+
+test('GET /api/admin/orders requires auth', async () => {
+  const { app, db } = appWithDb();
+  const res = await request(app).get('/api/admin/orders');
+  assert.equal(res.status, 401);
+  db.close();
+});
+
+test('GET /api/admin/orders rejects bad date format', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app).get('/api/admin/orders?from=abc').set('Cookie', cookie);
+  assert.equal(res.status, 400);
+  db.close();
+});
+
+test('GET /api/admin/orders respects date range', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const agent = request.agent(app);
+  await agent.post('/api/admin/auth/login').send({ pin: '1234' });
+
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  const o = db.prepare('INSERT INTO orders (table_id, total, created_at) VALUES (?, ?, ?)')
+    .run(t.body.id, 5, '2024-01-15 12:00:00');
+
+  const inRange = await request(app).get('/api/admin/orders?from=2024-01-01&to=2024-01-31').set('Cookie', cookie);
+  assert.equal(inRange.body.total_count, 1);
+
+  const outOfRange = await request(app).get('/api/admin/orders?from=2025-01-01').set('Cookie', cookie);
+  assert.equal(outOfRange.body.total_count, 0);
+  db.close();
+});
