@@ -517,3 +517,33 @@ test('GET /t/:token/orders serves the orders page HTML', async () => {
   assert.match(res.text, /Your orders/);
   db.close();
 });
+
+test('customer list hides orders from ended sessions', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'X', price: 1 });
+
+  // Two customer orders (customer routes are public)
+  await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+  await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+
+  // Verify 2 orders visible first
+  const before = await request(app).get(`/api/customer/orders?token=${t.qr_token}`);
+  assert.equal(before.body.orders.length, 2);
+
+  // Clear session as admin (agent is already logged in)
+  const clearRes = await agent.post(`/api/admin/tables/${t.id}/clear-session`).send();
+  assert.equal(clearRes.status, 200);
+  assert.equal(clearRes.body.cleared, 2);
+
+  // Now customer should see 0
+  const after = await request(app).get(`/api/customer/orders?token=${t.qr_token}`);
+  assert.equal(after.status, 200);
+  assert.equal(after.body.orders.length, 0);
+
+  db.close();
+});

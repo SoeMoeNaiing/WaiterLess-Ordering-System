@@ -39,32 +39,22 @@ export function adminTablesRouter({ db }) {
   // GET /api/admin/tables[?active=1|0]
   router.get('/', (req, res) => {
     const { active } = req.query;
-
     let rows;
     if (active === '1' || active === '0') {
-      rows = db
-        .prepare('SELECT * FROM tables WHERE is_active = ? ORDER BY table_number')
-        .all(Number(active));
+      rows = db.prepare('SELECT * FROM tables WHERE is_active = ? ORDER BY table_number').all(Number(active));
     } else {
-      rows = db
-        .prepare('SELECT * FROM tables ORDER BY table_number')
-        .all();
+      rows = db.prepare('SELECT * FROM tables ORDER BY table_number').all();
     }
-
     res.json(rows);
   });
 
   // PUT /api/admin/tables/:id
   router.put('/:id', (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: 'invalid id' });
-    }
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
 
     const existing = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
-    if (!existing) {
-      return res.status(404).json({ error: 'table not found' });
-    }
+    if (!existing) return res.status(404).json({ error: 'table not found' });
 
     const body = req.body ?? {};
     const updates = {};
@@ -75,17 +65,11 @@ export function adminTablesRouter({ db }) {
       }
       updates.table_number = body.table_number.trim();
     }
-
     if ('label' in body) {
-      if (body.label === null || body.label === '') {
-        updates.label = null;
-      } else if (typeof body.label === 'string') {
-        updates.label = body.label.trim() || null;
-      } else {
-        return res.status(400).json({ error: 'label must be a string or null' });
-      }
+      if (body.label === null || body.label === '') updates.label = null;
+      else if (typeof body.label === 'string') updates.label = body.label.trim() || null;
+      else return res.status(400).json({ error: 'label must be a string or null' });
     }
-
     if ('is_active' in body) {
       const v = body.is_active;
       if (v === true || v === 1 || v === '1') updates.is_active = 1;
@@ -114,17 +98,13 @@ export function adminTablesRouter({ db }) {
     res.json(updated);
   });
 
-  // DELETE /api/admin/tables/:id — SOFT delete (is_active = 0)
+  // DELETE /api/admin/tables/:id — SOFT delete
   router.delete('/:id', (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: 'invalid id' });
-    }
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
 
     const existing = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
-    if (!existing) {
-      return res.status(404).json({ error: 'table not found' });
-    }
+    if (!existing) return res.status(404).json({ error: 'table not found' });
 
     db.prepare('UPDATE tables SET is_active = 0 WHERE id = ?').run(id);
     const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
@@ -134,46 +114,50 @@ export function adminTablesRouter({ db }) {
   // POST /api/admin/tables/:id/regenerate-token
   router.post('/:id/regenerate-token', (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: 'invalid id' });
-    }
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
 
     const existing = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
-    if (!existing) {
-      return res.status(404).json({ error: 'table not found' });
-    }
+    if (!existing) return res.status(404).json({ error: 'table not found' });
 
     const newToken = newTableToken();
     db.prepare('UPDATE tables SET qr_token = ? WHERE id = ?').run(newToken, id);
-
     const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
     res.json(updated);
+  });
+
+  // POST /api/admin/tables/:id/clear-session
+  router.post('/:id/clear-session', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
+
+    const existing = db.prepare('SELECT id FROM tables WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'table not found' });
+
+    const result = db.prepare(
+      `UPDATE orders
+          SET session_ended_at = CURRENT_TIMESTAMP
+        WHERE table_id = ?
+          AND session_ended_at IS NULL`
+    ).run(id);
+
+    res.json({ cleared: result.changes });
   });
 
   // GET /api/admin/tables/:id/qr.png[?size=N]
   router.get('/:id/qr.png', async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: 'invalid id' });
-    }
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
 
     const row = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
-    if (!row) {
-      return res.status(404).json({ error: 'table not found' });
-    }
+    if (!row) return res.status(404).json({ error: 'table not found' });
 
     const size = Math.min(Math.max(Number(req.query.size) || 400, 128), 1024);
-
-    const base = process.env.PUBLIC_BASE_URL
-      || `${req.protocol}://${req.get('host')}`;
+    const base = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
     const target = `${base}/t/${row.qr_token}`;
 
     try {
       const buf = await QRCode.toBuffer(target, {
-        type: 'png',
-        width: size,
-        margin: 1,
-        errorCorrectionLevel: 'M',
+        type: 'png', width: size, margin: 1, errorCorrectionLevel: 'M',
       });
       res.type('png').send(buf);
     } catch (err) {
@@ -182,5 +166,5 @@ export function adminTablesRouter({ db }) {
     }
   });
 
-  return router;   // ← MUST be the last statement in the function
+  return router;
 }

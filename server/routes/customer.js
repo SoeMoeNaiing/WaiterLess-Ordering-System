@@ -183,6 +183,7 @@ export function customerRouter({ db }) {
       `SELECT id, status, total, notes, created_at, updated_at
          FROM orders
         WHERE table_id = ?
+          AND session_ended_at IS NULL
           AND created_at > datetime('now', '-12 hours')
         ORDER BY created_at DESC, id DESC`
     ).all(table.id);

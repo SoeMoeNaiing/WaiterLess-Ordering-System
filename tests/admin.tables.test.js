@@ -471,3 +471,63 @@ test('QR endpoint accepts a size query param without erroring', async () => {
   assert.match(res.headers['content-type'], /^image\/png/);
   db.close();
 });
+
+// ---------- POST /api/admin/tables/:id/clear-session ----------
+
+test('clear-session returns 0 when table has no orders', async () => {
+  const { app, agent, db } = await appWithDb();
+  const created = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+
+  const res = await agent.post(`/api/admin/tables/${created.body.id}/clear-session`).send();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.cleared, 0);
+  db.close();
+});
+
+test('clear-session marks open orders as ended', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+
+  // Create two orders directly
+  const o1 = db.prepare('INSERT INTO orders (table_id, total) VALUES (?, ?)').run(t.body.id, 1.0);
+  const o2 = db.prepare('INSERT INTO orders (table_id, total) VALUES (?, ?)').run(t.body.id, 2.0);
+
+  const res = await agent.post(`/api/admin/tables/${t.body.id}/clear-session`).send();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.cleared, 2);
+
+  const a = db.prepare('SELECT session_ended_at FROM orders WHERE id = ?').get(o1.lastInsertRowid);
+  const b = db.prepare('SELECT session_ended_at FROM orders WHERE id = ?').get(o2.lastInsertRowid);
+  assert.ok(a.session_ended_at, 'o1 should be ended');
+  assert.ok(b.session_ended_at, 'o2 should be ended');
+  db.close();
+});
+
+test('clear-session does not affect other tables', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t1 = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  const t2 = await agent.post('/api/admin/tables').send({ table_number: 'T2' });
+
+  db.prepare('INSERT INTO orders (table_id, total) VALUES (?, ?)').run(t1.body.id, 1.0);
+  const o2 = db.prepare('INSERT INTO orders (table_id, total) VALUES (?, ?)').run(t2.body.id, 2.0);
+
+  await agent.post(`/api/admin/tables/${t1.body.id}/clear-session`).send();
+
+  const check = db.prepare('SELECT session_ended_at FROM orders WHERE id = ?').get(o2.lastInsertRowid);
+  assert.equal(check.session_ended_at, null);
+  db.close();
+});
+
+test('clear-session on unknown id returns 404', async () => {
+  const { app, agent, db } = await appWithDb();
+  const res = await agent.post('/api/admin/tables/9999/clear-session').send();
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('clear-session requires auth', async () => {
+  const { app, db } = await appWithDb();
+  const res = await request(app).post('/api/admin/tables/1/clear-session').send();
+  assert.equal(res.status, 401);
+  db.close();
+});
