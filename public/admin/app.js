@@ -48,7 +48,7 @@ function showLogin() {
 
 function showApp() {
   $('login-view').style.display = 'none';
-  $('app-view').style.display = 'block';
+  $('app-view').style.display = 'grid';
 }
 
 async function login() {
@@ -77,16 +77,36 @@ async function logout() {
   showLogin();
 }
 
+// ---------- Tabs ----------
+
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  tables: 'Tables',
+  menu: 'Menu',
+  orders: 'Orders',
+  settings: 'Settings',
+};
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === name);
+  });
+  document.querySelectorAll('.panel').forEach((p) => {
+    p.classList.toggle('active', p.dataset.panel === name);
+  });
+  const title = $('page-title');
+  if (title) title.textContent = PAGE_TITLES[name] || name;
+  if (window.location.hash !== '#' + name) {
+    history.replaceState(null, '', '#' + name);
+  }
+  const sb = $('sidebar');
+  if (sb) sb.classList.remove('open');
+}
+
 // ---------- Tables ----------
 
 async function refresh() {
-  const [health, tables] = await Promise.all([
-    fetch('/health').then(r => r.json()),
-    api('/api/admin/tables'),
-  ]);
-
-  $('status').textContent = `db: ${health.db} — ${tables.length} table(s)`;
-
+  const tables = await api('/api/admin/tables');
   const root = $('tables');
   root.replaceChildren();
 
@@ -101,7 +121,7 @@ async function refresh() {
 function renderTable(t) {
   const img = el('img', { src: `/api/admin/tables/${t.id}/qr.png?size=192`, alt: `QR for ${t.table_number}` });
 
-    const orderBadge = t.active_orders_count > 0
+  const orderBadge = t.active_orders_count > 0
     ? el('span', { className: 'badge warn', text: `${t.active_orders_count} active` })
     : el('span', { className: 'badge idle', text: 'idle' });
 
@@ -140,7 +160,7 @@ function renderTable(t) {
     },
   });
 
-     const clear = el('button', {
+  const clear = el('button', {
     text: 'Clear session',
     onclick: async () => {
       if (!confirm(`Clear session for ${t.table_number}? Customer will no longer see previous orders.`)) return;
@@ -415,6 +435,7 @@ $('add-item').onclick = async () => {
     if (e.message !== 'unauthorized') $('add-item-error').textContent = e.message;
   }
 };
+
 // ---------- Dashboard ----------
 
 async function refreshDashboard() {
@@ -443,14 +464,15 @@ async function refreshDashboard() {
     if (e.message !== 'unauthorized') console.warn('dashboard failed', e);
   }
 }
+
 // ---------- Order history ----------
 
 async function loadHistory(range) {
   const now = new Date();
   let from = '';
-  if (range === 'today') from = now.toISOString().slice(0, 10);
-  else if (range === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); from = d.toISOString().slice(0, 10); }
-  else if (range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 30); from = d.toISOString().slice(0, 10); }
+  if (range === 'today') from = now.toLocaleDateString('en-CA');
+  else if (range === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); from = d.toLocaleDateString('en-CA'); }
+  else if (range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 30); from = d.toLocaleDateString('en-CA'); }
 
   const url = from ? `/api/admin/orders?from=${from}&limit=200` : '/api/admin/orders?limit=200';
   const msg = $('hist-summary');
@@ -480,7 +502,7 @@ async function loadHistory(range) {
           el('div', { className: 'label', text: o.created_at }),
           items,
         ]),
-        el('div', { style: 'text-align:right; font-weight:600;' , text: o.total.toFixed(2) }),
+        el('div', { style: 'text-align:right; font-weight:600;', text: o.total.toFixed(2) }),
       ]));
     }
   } catch (e) {
@@ -489,12 +511,6 @@ async function loadHistory(range) {
   }
 }
 
-if ($('hist-today')) {
-  $('hist-today').onclick = () => loadHistory('today');
-  $('hist-week').onclick = () => loadHistory('week');
-  $('hist-month').onclick = () => loadHistory('month');
-  $('hist-all').onclick = () => loadHistory('all');
-}
 // ---------- Settings ----------
 
 async function refreshSettings() {
@@ -503,6 +519,8 @@ async function refreshSettings() {
     $('setting-restaurant-name').value = s.restaurant_name || '';
     $('setting-currency').value = s.currency || '';
     $('setting-default-language').value = s.default_language || '';
+    const brand = $('brand-name');
+    if (brand && s.restaurant_name) brand.textContent = s.restaurant_name;
   } catch (e) {
     if (e.message !== 'unauthorized') console.warn('settings load failed', e);
   }
@@ -526,12 +544,15 @@ async function saveSettings() {
     });
     msg.textContent = 'Settings saved.';
     msg.style.color = '#155724';
+    const brand = $('brand-name');
+    if (brand) brand.textContent = payload.restaurant_name || 'Restaurant';
   } catch (e) {
     if (e.message === 'unauthorized') return;
     msg.textContent = e.message;
     msg.style.color = '#b02a37';
   }
 }
+
 // ---------- Security ----------
 
 async function changePin(target) {
@@ -559,52 +580,65 @@ async function changePin(target) {
     msg.style.color = '#b02a37';
   }
 }
-// ---------- Tabs ----------
 
-function showTab(name) {
+// ---------- Boot ----------
+
+function wireTabs() {
   document.querySelectorAll('.tab').forEach((t) => {
-    t.classList.toggle('active', t.dataset.tab === name);
+    t.onclick = () => showTab(t.dataset.tab);
   });
-  document.querySelectorAll('.panel').forEach((p) => {
-    p.classList.toggle('active', p.dataset.panel === name);
-  });
-  if (window.location.hash !== '#' + name) {
-    history.replaceState(null, '', '#' + name);
+  const initialTab = (window.location.hash || '#dashboard').slice(1);
+  showTab(initialTab);
+}
+
+function wireButtons() {
+  $('pin-submit').onclick = login;
+  $('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+  $('logout-btn').onclick = logout;
+
+  const btnMenu = $('menu-toggle');
+  if (btnMenu) {
+    btnMenu.onclick = () => {
+      const sb = $('sidebar');
+      if (sb) sb.classList.toggle('open');
+    };
+  }
+
+  const btnAdminPin = $('change-admin-pin');
+  if (btnAdminPin) btnAdminPin.onclick = () => changePin('admin');
+  const btnKitchenPin = $('change-kitchen-pin');
+  if (btnKitchenPin) btnKitchenPin.onclick = () => changePin('kitchen');
+  const btnSaveSettings = $('save-settings');
+  if (btnSaveSettings) btnSaveSettings.onclick = saveSettings;
+
+  if ($('hist-today')) {
+    $('hist-today').onclick = () => loadHistory('today');
+    $('hist-week').onclick = () => loadHistory('week');
+    $('hist-month').onclick = () => loadHistory('month');
+    $('hist-all').onclick = () => loadHistory('all');
   }
 }
 
-document.querySelectorAll('.tab').forEach((t) => {
-  t.onclick = () => showTab(t.dataset.tab);
-});
-
-// Restore last tab from the URL hash on load; default dashboard.
-const initialTab = (window.location.hash || '#dashboard').slice(1);
-showTab(initialTab);
-// ---------- Boot ----------
-
-$('pin-submit').onclick = login;
-$('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
-$('logout-btn').onclick = logout;
-
-const btnAdminPin = $('change-admin-pin');
-if (btnAdminPin) btnAdminPin.onclick = () => changePin('admin');
-const btnKitchenPin = $('change-kitchen-pin');
-if (btnKitchenPin) btnKitchenPin.onclick = () => changePin('kitchen');
-const btnSaveSettings = $('save-settings');
-if (btnSaveSettings) btnSaveSettings.onclick = saveSettings;
-
 async function loadApp() {
-  $('status').textContent = 'loading…';
   try {
-   await Promise.all([refresh(), refreshCategories(), refreshMenuItems(), refreshSettings(), refreshDashboard()]);
+    await Promise.all([
+      refresh(),
+      refreshCategories(),
+      refreshMenuItems(),
+      refreshSettings(),
+      refreshDashboard(),
+    ]);
   } catch (e) {
     if (e.message !== 'unauthorized') {
-      $('status').textContent = 'error loading: ' + e.message;
+      console.error('loadApp error', e);
     }
   }
 }
 
 async function boot() {
+  wireTabs();
+  wireButtons();
+
   const res = await fetch('/api/admin/tables');
   if (res.ok) {
     showApp();

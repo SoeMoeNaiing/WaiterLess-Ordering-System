@@ -4,247 +4,170 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin — Restaurant</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #222;
-    }
-    h1 { margin: 0 0 1rem; }
-    h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
-    .card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-    .row { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid #f0f0f0; }
-    .row:last-child { border-bottom: none; }
-    .row img { width: 96px; height: 96px; border: 1px solid #eee; border-radius: 4px; }
-    .row .info { flex: 1; }
-    .row .num { font-size: 1.1rem; font-weight: 600; }
-    .row .label { color: #666; font-size: 0.9rem; }
-    .row .token { color: #999; font-size: 0.75rem; font-family: monospace; }
-    .badge { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.5rem; }
-    .badge.on { background: #d1f4d1; color: #155724; }
-    .badge.off { background: #f4d1d1; color: #721c24; }
-    button {
-      font: inherit; padding: 0.4rem 0.8rem; border: 1px solid #ccc; border-radius: 6px;
-      background: #fff; cursor: pointer;
-    }
-    button:hover { background: #f5f5f5; }
-    button.primary { background: #0a58ca; color: #fff; border-color: #0a58ca; }
-    button.primary:hover { background: #084cb0; }
-    button.danger { color: #b02a37; border-color: #b02a37; }
-    button.danger:hover { background: #fbeaec; }
-    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    input[type="text"], input[type="password"], input[type="number"], select {
-      font: inherit; padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 6px;
-    }
-    input[type="text"], input[type="password"] { width: 100%; }
-    .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
-    .form-row input { flex: 1; min-width: 8rem; }
-    .muted { color: #888; font-size: 0.9rem; }
-    .error { color: #b02a37; }
-    .thumb { width: 64px; height: 64px; object-fit: cover; border: 1px solid #eee; border-radius: 4px; background: #f8f8f8; }
-
-    /* Login view */
-    #login-view {
-      max-width: 340px; margin: 4rem auto;
-      text-align: center;
-    }
-    #login-view h1 { margin-bottom: 2rem; }
-    #login-view input { text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem; }
-    #login-view button { width: 100%; margin-top: 0.75rem; padding: 0.75rem; font-size: 1rem; }
-    #login-view .error { margin-top: 0.75rem; min-height: 1.2rem; }
-
-    /* App view */
-    #app-view { display: none; }
-    .app-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-    .app-header h1 { margin: 0; }
-
-    /* Tabs */
-    .tabs {
-      display: flex; gap: 0.15rem; margin-bottom: 1rem;
-      border-bottom: 2px solid #e0e0e0; flex-wrap: wrap;
-    }
-    .tab {
-      background: none; border: none; padding: 0.6rem 1rem;
-      font: inherit; font-weight: 600; color: #666;
-      cursor: pointer; border-radius: 0;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-    }
-    .tab:hover { background: none; color: #0a58ca; }
-    .tab.active { color: #0a58ca; border-bottom-color: #0a58ca; }
-    .panel { display: none; }
-    .panel.active { display: block; }
-
-    /* Dashboard stat tiles */
-    .stats {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 1rem; margin-bottom: 1rem;
-    }
-    .stat { text-align: center; }
-    .stat .num { font-size: 2rem; font-weight: 700; }
-    .stat .lbl { color: #888; font-size: 0.85rem; }
-        .badge.warn { background: #fff3cd; color: #856404; }
-    .badge.idle { background: #e9ecef; color: #495057; }
-  </style>
+  <link rel="stylesheet" href="/admin/style.css" />
 </head>
 <body>
 
-  <!-- Login view -->
+  <!-- ============ LOGIN ============ -->
   <section id="login-view">
     <h1>Admin</h1>
-    <p class="muted">Enter the admin PIN</p>
+    <p>Enter the admin PIN</p>
     <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" />
-    <button id="pin-submit" class="primary">Log in</button>
+    <button id="pin-submit">Log in</button>
     <div id="pin-error" class="error"></div>
   </section>
 
-  <!-- Main app view -->
+  <!-- ============ APP ============ -->
   <section id="app-view">
-    <div class="app-header">
-      <h1>Admin</h1>
-      <button id="logout-btn" class="danger">Log out</button>
-    </div>
 
-    <p class="muted" id="status">loading…</p>
+    <header class="topbar">
+      <button class="menu-toggle" id="menu-toggle">☰</button>
+      <div class="brand">
+        <span id="brand-name">Restaurant</span>
+        <span class="sub">Admin</span>
+      </div>
+      <div class="spacer"></div>
+      <button id="logout-btn" class="logout-btn">Log out</button>
+    </header>
 
-    <nav class="tabs">
-      <button class="tab" data-tab="dashboard">Dashboard</button>
-      <button class="tab" data-tab="tables">Tables</button>
-      <button class="tab" data-tab="menu">Menu</button>
-      <button class="tab" data-tab="orders">Orders</button>
-      <button class="tab" data-tab="settings">Settings</button>
-    </nav>
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <button class="tab" data-tab="dashboard">Dashboard</button>
+        <button class="tab" data-tab="tables">Tables</button>
+        <button class="tab" data-tab="menu">Menu</button>
+        <button class="tab" data-tab="orders">Orders</button>
+        <button class="tab" data-tab="settings">Settings</button>
+      </nav>
+    </aside>
 
-    <!-- ============ PANEL: DASHBOARD ============ -->
-    <section class="panel" data-panel="dashboard">
-      <div class="card">
-        <h2>Today</h2>
+    <main class="content">
+      <h1 class="page-title" id="page-title">Dashboard</h1>
+
+      <!-- ============ PANEL: DASHBOARD ============ -->
+      <section class="panel" data-panel="dashboard">
         <div class="stats">
           <div class="stat">
-            <div class="num" style="color:#0a58ca;" id="dash-completed">—</div>
+            <div class="num" id="dash-completed">—</div>
             <div class="lbl">Served</div>
           </div>
-          <div class="stat">
-            <div class="num" style="color:#ffc107;" id="dash-progress">—</div>
+          <div class="stat warn">
+            <div class="num" id="dash-progress">—</div>
             <div class="lbl">In progress</div>
           </div>
-          <div class="stat">
-            <div class="num" style="color:#198754;" id="dash-sales">—</div>
+          <div class="stat success">
+            <div class="num" id="dash-sales">—</div>
             <div class="lbl">Sales</div>
           </div>
-          <div class="stat">
-            <div class="num" style="color:#666;" id="dash-avg">—</div>
+          <div class="stat muted">
+            <div class="num" id="dash-avg">—</div>
             <div class="lbl">Avg order</div>
           </div>
         </div>
-        <h2 style="margin-top: 1rem;">Top items today</h2>
-        <div id="dash-top"><p class="muted">loading…</p></div>
-      </div>
-    </section>
 
-    <!-- ============ PANEL: TABLES ============ -->
-    <section class="panel" data-panel="tables">
-      <div class="card">
-        <h2>Add table</h2>
-        <div class="form-row">
-          <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" />
-          <input id="new-table-label" type="text" placeholder="Label (optional)" />
-          <button id="add-table" class="primary">Add</button>
+        <div class="card">
+          <h2>Top items today</h2>
+          <div id="dash-top"><p class="muted">loading…</p></div>
         </div>
-        <p id="add-error" class="error"></p>
-      </div>
+      </section>
 
-      <div class="card">
-        <h2>Tables</h2>
-                <div style="margin-bottom: 0.75rem;">
-          <a href="/admin/print.html" target="_blank" class="primary" style="display: inline-block; padding: 0.4rem 0.8rem; background: #0a58ca; color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600;">Print all QR codes →</a>
-        </div>
-        <div id="tables"><p class="muted">loading…</p></div>
-      </div>
-    </section>
-
-    <!-- ============ PANEL: MENU ============ -->
-    <section class="panel" data-panel="menu">
-      <div class="card">
-        <h2>Categories</h2>
-        <div class="form-row">
-          <input id="new-category-name" type="text" placeholder="Category name" />
-          <input id="new-category-order" type="number" placeholder="Order" value="0" style="max-width: 6rem;" />
-          <button id="add-category" class="primary">Add</button>
-        </div>
-        <p id="add-category-error" class="error"></p>
-        <div id="categories"><p class="muted">loading…</p></div>
-      </div>
-
-      <div class="card">
-        <h2>Menu items</h2>
-        <div class="form-row">
-          <input id="new-item-name" type="text" placeholder="Item name" />
-          <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" />
-          <select id="new-item-category" style="flex: 1; min-width: 8rem;"></select>
-          <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 12rem;" />
-          <button id="add-item" class="primary">Add</button>
-        </div>
-        <p id="add-item-error" class="error"></p>
-        <div id="menu-items"><p class="muted">loading…</p></div>
-      </div>
-    </section>
-
-    <!-- ============ PANEL: ORDERS ============ -->
-    <section class="panel" data-panel="orders">
-      <div class="card">
-        <h2>Order history</h2>
-        <div class="form-row">
-          <button id="hist-today">Today</button>
-          <button id="hist-week">Last 7 days</button>
-          <button id="hist-month">Last 30 days</button>
-          <button id="hist-all">All</button>
-        </div>
-        <p class="muted" id="hist-summary">Pick a range.</p>
-        <div id="hist-list"></div>
-      </div>
-    </section>
-
-    <!-- ============ PANEL: SETTINGS ============ -->
-    <section class="panel" data-panel="settings">
-      <div class="card">
-        <h2>Settings</h2>
-        <div class="form-row">
-          <input id="setting-restaurant-name" type="text" placeholder="Restaurant name" />
-        </div>
-        <div class="form-row">
-          <input id="setting-currency" type="text" placeholder="Currency (e.g. MMK)" style="max-width: 8rem;" />
-          <input id="setting-default-language" type="text" placeholder="Language (en, my)" style="max-width: 8rem;" />
-          <button id="save-settings" class="primary">Save</button>
-        </div>
-        <p id="settings-message" class="muted" style="min-height: 1.2rem;"></p>
-      </div>
-
-      <div class="card">
-        <h2>Security</h2>
-        <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
-
-        <div class="form-row" style="margin-top: 0.75rem;">
-          <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
+      <!-- ============ PANEL: TABLES ============ -->
+      <section class="panel" data-panel="tables">
+        <div class="card">
+          <h2>Add table</h2>
+          <div class="form-row">
+            <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" />
+            <input id="new-table-label" type="text" placeholder="Label (optional)" />
+            <button id="add-table" class="primary">Add</button>
+          </div>
+          <p id="add-error" class="error"></p>
         </div>
 
-        <div class="form-row">
-          <input id="new-admin-pin" type="password" inputmode="numeric" placeholder="New admin PIN (4-12 digits)" />
-          <button id="change-admin-pin" class="primary">Change admin PIN</button>
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+            <h2 style="margin:0;">Tables</h2>
+            <a href="/admin/print.html" target="_blank" class="link-button">Print all QR codes →</a>
+          </div>
+          <div id="tables"><p class="muted">loading…</p></div>
+        </div>
+      </section>
+
+      <!-- ============ PANEL: MENU ============ -->
+      <section class="panel" data-panel="menu">
+        <div class="card">
+          <h2>Categories</h2>
+          <div class="form-row">
+            <input id="new-category-name" type="text" placeholder="Category name" />
+            <input id="new-category-order" type="number" placeholder="Order" value="0" style="max-width: 6rem;" />
+            <button id="add-category" class="primary">Add</button>
+          </div>
+          <p id="add-category-error" class="error"></p>
+          <div id="categories"><p class="muted">loading…</p></div>
         </div>
 
-        <div class="form-row">
-          <input id="new-kitchen-pin" type="password" inputmode="numeric" placeholder="New kitchen PIN (4-12 digits)" />
-          <button id="change-kitchen-pin" class="primary">Change kitchen PIN</button>
+        <div class="card">
+          <h2>Menu items</h2>
+          <div class="form-row">
+            <input id="new-item-name" type="text" placeholder="Item name" />
+            <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" />
+            <select id="new-item-category" style="flex: 1; min-width: 8rem;"></select>
+            <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 12rem;" />
+            <button id="add-item" class="primary">Add</button>
+          </div>
+          <p id="add-item-error" class="error"></p>
+          <div id="menu-items"><p class="muted">loading…</p></div>
+        </div>
+      </section>
+
+      <!-- ============ PANEL: ORDERS ============ -->
+      <section class="panel" data-panel="orders">
+        <div class="card">
+          <h2>Order history</h2>
+          <div class="form-row">
+            <button id="hist-today">Today</button>
+            <button id="hist-week">Last 7 days</button>
+            <button id="hist-month">Last 30 days</button>
+            <button id="hist-all">All</button>
+          </div>
+          <p class="muted" id="hist-summary">Pick a range.</p>
+          <div id="hist-list"></div>
+        </div>
+      </section>
+
+      <!-- ============ PANEL: SETTINGS ============ -->
+      <section class="panel" data-panel="settings">
+        <div class="card">
+          <h2>Restaurant settings</h2>
+          <div class="form-row">
+            <input id="setting-restaurant-name" type="text" placeholder="Restaurant name" />
+          </div>
+          <div class="form-row">
+            <input id="setting-currency" type="text" placeholder="Currency (e.g. MMK)" style="max-width: 8rem;" />
+            <input id="setting-default-language" type="text" placeholder="Language (en, my)" style="max-width: 8rem;" />
+            <button id="save-settings" class="primary">Save</button>
+          </div>
+          <p id="settings-message" class="muted" style="min-height: 1.2rem;"></p>
         </div>
 
-        <p id="security-message" class="muted" style="min-height: 1.2rem;"></p>
-      </div>
-    </section>
+        <div class="card">
+          <h2>Security</h2>
+          <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
 
+          <div class="form-row" style="margin-top: 0.75rem;">
+            <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
+          </div>
+          <div class="form-row">
+            <input id="new-admin-pin" type="password" inputmode="numeric" placeholder="New admin PIN (4-12 digits)" />
+            <button id="change-admin-pin" class="primary">Change admin PIN</button>
+          </div>
+          <div class="form-row">
+            <input id="new-kitchen-pin" type="password" inputmode="numeric" placeholder="New kitchen PIN (4-12 digits)" />
+            <button id="change-kitchen-pin" class="primary">Change kitchen PIN</button>
+          </div>
+          <p id="security-message" class="muted" style="min-height: 1.2rem;"></p>
+        </div>
+      </section>
+
+    </main>
   </section>
 
   <script src="/admin/app.js"></script>
