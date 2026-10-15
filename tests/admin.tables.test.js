@@ -550,3 +550,26 @@ test('GET /api/admin/tables includes active_orders_count', async () => {
   assert.equal(withOrders.body[0].active_orders_count, 2);
   db.close();
 });
+
+test('PUT table returns correct active_orders_count', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  db.prepare("INSERT INTO orders (table_id, total, status) VALUES (?, 5, 'placed')").run(t.body.id);
+
+  const res = await agent.put(`/api/admin/tables/${t.body.id}`).send({ label: 'Updated' });
+  assert.equal(res.body.active_orders_count, 1);
+  db.close();
+});
+
+test('clear-session returns in_progress_count', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  db.prepare("INSERT INTO orders (table_id, total, status) VALUES (?, 5, 'placed')").run(t.body.id);
+  db.prepare("INSERT INTO orders (table_id, total, status) VALUES (?, 5, 'preparing')").run(t.body.id);
+  db.prepare("INSERT INTO orders (table_id, total, status) VALUES (?, 5, 'served')").run(t.body.id);
+
+  const res = await agent.post(`/api/admin/tables/${t.body.id}/clear-session`).send();
+  assert.equal(res.body.cleared, 3);
+  assert.equal(res.body.in_progress_count, 2);
+  db.close();
+});

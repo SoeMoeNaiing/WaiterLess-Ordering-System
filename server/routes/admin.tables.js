@@ -2,10 +2,26 @@ import { Router } from 'express';
 import QRCode from 'qrcode';
 import { newTableToken } from '../utils/tokens.js';
 
+function getActiveOrderCount(db, tableId) {
+  return db.prepare(
+    `SELECT COUNT(*) AS n FROM orders
+      WHERE table_id = ?
+        AND session_ended_at IS NULL
+        AND status IN ('placed','preparing','ready')`
+  ).get(tableId).n;
+}
+
+function getInProgressCount(db, tableId) {
+  return db.prepare(
+    `SELECT COUNT(*) AS n FROM orders
+      WHERE table_id = ?
+        AND status IN ('placed','preparing','ready')`
+  ).get(tableId).n;
+}
+
 export function adminTablesRouter({ db }) {
   const router = Router();
 
-  // POST /api/admin/tables
   router.post('/', (req, res) => {
     const { table_number, label } = req.body ?? {};
 
@@ -22,10 +38,7 @@ export function adminTablesRouter({ db }) {
         .prepare('INSERT INTO tables (table_number, label, qr_token) VALUES (?, ?, ?)')
         .run(cleanNumber, cleanLabel, token);
 
-      const row = db
-        .prepare('SELECT * FROM tables WHERE id = ?')
-        .get(result.lastInsertRowid);
-
+      const row = db.prepare('SELECT * FROM tables WHERE id = ?').get(result.lastInsertRowid);
       return res.status(201).json({ ...row, active_orders_count: 0 });
     } catch (err) {
       if (String(err.message).includes('UNIQUE constraint failed')) {
@@ -36,7 +49,6 @@ export function adminTablesRouter({ db }) {
     }
   });
 
-  // GET /api/admin/tables[?active=1|0]
   router.get('/', (req, res) => {
     const { active } = req.query;
     let rows;
@@ -58,7 +70,6 @@ export function adminTablesRouter({ db }) {
     res.json(rows.map((t) => ({ ...t, active_orders_count: byTable[t.id] || 0 })));
   });
 
-  // PUT /api/admin/tables/:id
   router.put('/:id', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
@@ -105,10 +116,9 @@ export function adminTablesRouter({ db }) {
     }
 
     const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
-    res.json({ ...updated, active_orders_count: 0 });
+    res.json({ ...updated, active_orders_count: getActiveOrderCount(db, id) });
   });
 
-  // DELETE /api/admin/tables/:id — SOFT delete
   router.delete('/:id', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
@@ -121,7 +131,6 @@ export function adminTablesRouter({ db }) {
     res.json(updated);
   });
 
-  // POST /api/admin/tables/:id/regenerate-token
   router.post('/:id/regenerate-token', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
@@ -132,16 +141,17 @@ export function adminTablesRouter({ db }) {
     const newToken = newTableToken();
     db.prepare('UPDATE tables SET qr_token = ? WHERE id = ?').run(newToken, id);
     const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
-    res.json(updated);
+    res.json({ ...updated, active_orders_count: getActiveOrderCount(db, id) });
   });
 
-  // POST /api/admin/tables/:id/clear-session
   router.post('/:id/clear-session', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
 
     const existing = db.prepare('SELECT id FROM tables WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: 'table not found' });
+
+    const in_progress_count = getInProgressCount(db, id);
 
     const result = db.prepare(
       `UPDATE orders
@@ -150,10 +160,9 @@ export function adminTablesRouter({ db }) {
           AND session_ended_at IS NULL`
     ).run(id);
 
-    res.json({ cleared: result.changes });
+    res.json({ cleared: result.changes, in_progress_count });
   });
 
-  // GET /api/admin/tables/:id/qr.png[?size=N]
   router.get('/:id/qr.png', async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });

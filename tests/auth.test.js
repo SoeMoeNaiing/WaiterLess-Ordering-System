@@ -475,3 +475,13 @@ test('GET /api/admin/dashboard rejects bad date', async () => {
   assert.equal(res.status, 400);
   db.close();
 });
+
+test('dashboard uses local date, not UTC', async () => {
+  const { app, db } = appWithDb();
+  const cookie = await loginAdmin(app);
+  const res = await request(app).get('/api/admin/dashboard').set('Cookie', cookie);
+
+  const localDate = new Date().toLocaleDateString('en-CA');
+  assert.equal(res.body.date, localDate);
+  db.close();
+});
