@@ -68,3 +68,27 @@ test('GET /admin/print.html serves the print page', async () => {
   assert.match(res.headers['content-type'], /^text\/html/);
   assert.match(res.text, /Print QR/);
 });
+
+test('GET /i18n/en.json serves the English dictionary', async () => {
+  const app = createApp();
+  const res = await request(app).get('/i18n/en.json');
+  assert.equal(res.status, 200);
+  const dict = JSON.parse(res.text);
+  assert.equal(dict['customer.place_order'], 'Place order');
+});
+
+test('GET /i18n/my.json serves the Burmese dictionary', async () => {
+  const app = createApp();
+  const res = await request(app).get('/i18n/my.json');
+  assert.equal(res.status, 200);
+  const dict = JSON.parse(res.text);
+  assert.ok(dict['customer.place_order']);
+  assert.notEqual(dict['customer.place_order'], 'Place order');
+});
+
+test('GET /i18n/i18n.js serves the helper', async () => {
+  const app = createApp();
+  const res = await request(app).get('/i18n/i18n.js');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /javascript/);
+});
