@@ -531,3 +531,22 @@ test('clear-session requires auth', async () => {
   assert.equal(res.status, 401);
   db.close();
 });
+
+test('GET /api/admin/tables includes active_orders_count', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+
+  // No orders yet → 0
+  const empty = await agent.get('/api/admin/tables');
+  assert.equal(empty.body[0].active_orders_count, 0);
+
+  // Insert 2 active + 1 served + 1 ended
+  db.prepare("INSERT INTO orders (table_id, total, status) VALUES (?, ?, 'placed')").run(t.body.id, 5);
+  db.prepare("INSERT INTO orders (table_id, total, status) VALUES (?, ?, 'preparing')").run(t.body.id, 5);
+  db.prepare("INSERT INTO orders (table_id, total, status) VALUES (?, ?, 'served')").run(t.body.id, 5);
+  db.prepare("INSERT INTO orders (table_id, total, status, session_ended_at) VALUES (?, ?, 'placed', CURRENT_TIMESTAMP)").run(t.body.id, 5);
+
+  const withOrders = await agent.get('/api/admin/tables');
+  assert.equal(withOrders.body[0].active_orders_count, 2);
+  db.close();
+});

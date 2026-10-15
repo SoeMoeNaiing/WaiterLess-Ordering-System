@@ -101,6 +101,10 @@ async function refresh() {
 function renderTable(t) {
   const img = el('img', { src: `/api/admin/tables/${t.id}/qr.png?size=192`, alt: `QR for ${t.table_number}` });
 
+    const orderBadge = t.active_orders_count > 0
+    ? el('span', { className: 'badge warn', text: `${t.active_orders_count} active` })
+    : el('span', { className: 'badge idle', text: 'idle' });
+
   const info = el('div', { className: 'info' }, [
     el('div', { className: 'num' }, [
       t.table_number,
@@ -108,6 +112,7 @@ function renderTable(t) {
         className: `badge ${t.is_active ? 'on' : 'off'}`,
         text: t.is_active ? 'active' : 'inactive',
       }),
+      orderBadge,
     ]),
     t.label ? el('div', { className: 'label', text: t.label }) : null,
     el('div', { className: 'token', text: t.qr_token }),

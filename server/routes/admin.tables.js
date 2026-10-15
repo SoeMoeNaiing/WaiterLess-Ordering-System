@@ -26,7 +26,7 @@ export function adminTablesRouter({ db }) {
         .prepare('SELECT * FROM tables WHERE id = ?')
         .get(result.lastInsertRowid);
 
-      return res.status(201).json(row);
+      return res.status(201).json({ ...row, active_orders_count: 0 });
     } catch (err) {
       if (String(err.message).includes('UNIQUE constraint failed')) {
         return res.status(409).json({ error: 'table_number already exists' });
@@ -45,7 +45,17 @@ export function adminTablesRouter({ db }) {
     } else {
       rows = db.prepare('SELECT * FROM tables ORDER BY table_number').all();
     }
-    res.json(rows);
+
+    const counts = db.prepare(
+      `SELECT table_id, COUNT(*) AS n
+         FROM orders
+        WHERE session_ended_at IS NULL
+          AND status IN ('placed','preparing','ready')
+        GROUP BY table_id`
+    ).all();
+    const byTable = Object.fromEntries(counts.map((c) => [c.table_id, c.n]));
+
+    res.json(rows.map((t) => ({ ...t, active_orders_count: byTable[t.id] || 0 })));
   });
 
   // PUT /api/admin/tables/:id
@@ -95,7 +105,7 @@ export function adminTablesRouter({ db }) {
     }
 
     const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
-    res.json(updated);
+    res.json({ ...updated, active_orders_count: 0 });
   });
 
   // DELETE /api/admin/tables/:id — SOFT delete
