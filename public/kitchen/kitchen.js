@@ -98,7 +98,7 @@ function renderOrder(o) {
     text: '\u00d7',
     title: 'Cancel order',
     onclick: async () => {
-      if (!confirm(`Cancel order #${o.id} for Table ${o.table_number}?`)) return;
+      if (!confirm(`Reject order #${o.id} for Table ${o.table_number}?`)) return;
       await patchOrder(o.id, { status: 'cancelled' });
       refresh();
     },
@@ -126,20 +126,36 @@ function renderOrder(o) {
     nodes.push(el('div', { className: 'notes', text: `Note: ${o.notes}` }));
   }
 
-  nodes.push(
-    el('div', { className: 'actions' }, [
-      el('button', {
-        className: 'btn-done',
-        text: 'Done',
-        onclick: async () => {
-          await patchOrder(o.id, { status: 'served' });
-          refresh();
-        },
-      }),
-    ])
-  );
+  // Status label + action buttons per state
+  const actions = el('div', { className: 'actions' });
 
-  return el('div', { className: `card ${ageClass(mins)}` }, nodes);
+  if (o.status === 'placed') {
+    actions.appendChild(el('button', {
+      className: 'btn-confirm',
+      text: 'Confirm',
+      onclick: async () => {
+        await patchOrder(o.id, { status: 'preparing' });
+        refresh();
+      },
+    }));
+  } else if (o.status === 'preparing' || o.status === 'ready') {
+    actions.appendChild(el('button', {
+      className: 'btn-serve',
+      text: 'Mark served',
+      onclick: async () => {
+        await patchOrder(o.id, { status: 'served' });
+        refresh();
+      },
+    }));
+  }
+
+  nodes.push(actions);
+
+  const cls = ['card', ageClass(mins)];
+  if (o.status === 'preparing') cls.push('preparing');
+  if (o.status === 'ready') cls.push('ready');
+
+  return el('div', { className: cls.filter(Boolean).join(' ') }, nodes);
 }
 
 async function refresh() {
@@ -163,7 +179,7 @@ async function refresh() {
     }
 
     const now = new Date().toLocaleTimeString();
-    $('status').textContent = `${orders.length} active · updated ${now}`;
+    $('status').textContent = `${orders.length} active \u00b7 updated ${now}`;
   } catch (e) {
     $('status').textContent = 'error: ' + e.message;
   }

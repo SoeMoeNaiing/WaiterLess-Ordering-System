@@ -42,9 +42,10 @@ function timeAgo(sqlTimestamp) {
 function statusInfo(status) {
   switch (status) {
     case 'placed':
+      return { label: t('status.waiting'), sub: t('status.waiting_hint'), cls: 'st-waiting' };
     case 'preparing':
     case 'ready':
-      return { label: t('status.confirmed'), sub: t('status.preparing'), cls: 'st-placed' };
+      return { label: t('status.confirmed'), sub: t('status.preparing'), cls: 'st-preparing' };
     case 'served':
       return { label: t('status.served'), sub: t('status.enjoy'), cls: 'st-served' };
     case 'cancelled':
@@ -156,7 +157,7 @@ async function boot() {
     langSelect.value = getLang();
     langSelect.addEventListener('change', async (e) => {
       await setLang(e.target.value);
-      lastSnapshot = ''; // force re-render with new language
+      lastSnapshot = '';
       refresh();
     });
   }

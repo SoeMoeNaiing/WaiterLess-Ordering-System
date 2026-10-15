@@ -1,3 +1,5 @@
+import { initI18n, t, getLang, setLang, applyTranslations } from '/i18n/i18n.js';
+
 const $ = (id) => document.getElementById(id);
 
 function getToken() {
@@ -28,6 +30,7 @@ function formatPrice(n) {
 // ---------- State ----------
 
 let currentMenu = null;
+let lastMenuData = null;
 let menuByItemId = new Map();
 let cart = [];
 
@@ -100,7 +103,6 @@ function renderCartBar() {
 }
 
 function renderCartPanel() {
-  // If we already showed a confirmation, don't overwrite it
   if ($('cart-inner').dataset.mode === 'confirmation') return;
 
   const root = $('cart-items');
@@ -109,7 +111,7 @@ function renderCartPanel() {
   if (cart.length === 0) {
     root.appendChild(el('div', {
       className: 'muted',
-      text: 'Cart is empty.',
+      text: t('customer.cart_empty'),
       style: 'padding: 1rem 0; color:#888;',
     }));
     $('place-order').disabled = true;
@@ -122,12 +124,12 @@ function renderCartPanel() {
     const item = menuByItemId.get(entry.itemId);
     if (!item) continue;
 
-    const dec = el('button', { text: '−', onclick: () => setQty(entry.itemId, entry.qty - 1) });
+    const dec = el('button', { text: '\u2212', onclick: () => setQty(entry.itemId, entry.qty - 1) });
     const inc = el('button', { text: '+', onclick: () => setQty(entry.itemId, entry.qty + 1) });
     const qty = el('span', { text: String(entry.qty), style: 'min-width: 1.5rem; text-align:center;' });
 
     root.appendChild(el('div', { className: 'cart-row' }, [
-      el('span', { className: 'name', text: `${item.name} — ${formatPrice(item.price)}` }),
+      el('span', { className: 'name', text: `${item.name} \u2014 ${formatPrice(item.price)}` }),
       el('span', { className: 'qty-controls' }, [dec, qty, inc]),
     ]));
   }
@@ -140,15 +142,13 @@ function renderMenu() {
   root.replaceChildren();
 
   if (!currentMenu || currentMenu.length === 0) {
-    root.appendChild(el('div', {
-      className: 'empty',
-      text: 'This menu is empty. Please ask a staff member.',
-    }));
+    root.appendChild(el('div', { className: 'empty', text: t('customer.empty_menu') }));
     return;
   }
 
   for (const cat of currentMenu) {
-    root.appendChild(el('h2', { text: cat.name }));
+    const catName = cat.id === null ? t('customer.other') : cat.name;
+    root.appendChild(el('h2', { text: catName }));
     for (const item of cat.items) {
       root.appendChild(renderItemWithCart(item));
     }
@@ -165,11 +165,11 @@ function renderItemWithCart(item) {
   });
 
   const price = el('span', { className: 'price', text: formatPrice(item.price) });
-  if (soldOut) price.appendChild(el('span', { className: 'sold', text: 'sold out' }));
+  if (soldOut) price.appendChild(el('span', { className: 'sold', text: t('customer.sold_out') }));
 
   const nameRow = el('div', { className: 'name' }, [item.name]);
   const inCart = cart.find((e) => e.itemId === item.id);
-  if (inCart) nameRow.appendChild(el('span', { className: 'qty-badge', text: `×${inCart.qty}` }));
+  if (inCart) nameRow.appendChild(el('span', { className: 'qty-badge', text: `\u00d7${inCart.qty}` }));
 
   const info = el('div', { className: 'info' }, [
     nameRow,
@@ -199,7 +199,7 @@ async function placeOrder() {
   };
 
   btn.disabled = true;
-  btn.textContent = 'Placing order…';
+  btn.textContent = t('customer.placing');
 
   try {
     const res = await fetch('/api/customer/orders', {
@@ -211,22 +211,16 @@ async function placeOrder() {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
 
-    showConfirmation(body);
     cart = [];
     saveCart(token);
-    renderCartBar();
-    renderMenu();
+    // Redirect to the LIST page (not the legacy single-order page)
+    window.location.href = `/t/${token}/orders`;
   } catch (e) {
-    err.textContent = e.message || 'Could not place order.';
+    err.textContent = e.message || t('customer.error_generic');
     err.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = 'Place order';
+    btn.textContent = t('customer.place_order');
   }
-}
-
-function showConfirmation({ order }) {
-  const token = getToken();
-  window.location.href = `/t/${token}/order/${order.id}`;
 }
 
 // ---------- Boot ----------
@@ -235,8 +229,25 @@ async function boot() {
   const token = getToken();
   if (!token) {
     $('root').innerHTML = '';
-    $('root').appendChild(el('div', { className: 'error', text: 'Invalid URL.' }));
+    $('root').appendChild(el('div', { className: 'error', text: t('customer.error_url') }));
     return;
+  }
+
+  await initI18n();
+  applyTranslations();
+
+  // Reflect the current language and wire the switcher
+  const langSelect = $('lang-select');
+  if (langSelect) {
+    langSelect.value = getLang();
+    langSelect.addEventListener('change', async (e) => {
+      await setLang(e.target.value);
+      if (lastMenuData) {
+        $('table-label').textContent = `${t('customer.table')} ${lastMenuData.table.table_number}`;
+      }
+      renderMenu();
+      renderCartPanel();
+    });
   }
 
   cart = loadCart(token);
@@ -244,16 +255,17 @@ async function boot() {
   try {
     const res = await fetch(`/api/customer/menu?token=${encodeURIComponent(token)}`);
     if (!res.ok) {
-      let msg = 'Could not load menu.';
-      if (res.status === 404) msg = 'This QR code is not recognized.';
-      else if (res.status === 410) msg = 'This table is no longer active. Please ask a staff member.';
+      let msg = t('customer.error_generic');
+      if (res.status === 404) msg = t('customer.error_404');
+      else if (res.status === 410) msg = t('customer.error_410');
       $('root').innerHTML = '';
       $('root').appendChild(el('div', { className: 'error', text: msg }));
       return;
     }
 
     const data = await res.json();
-    $('table-label').textContent = `Table ${data.table.table_number}`;
+    lastMenuData = data;
+    $('table-label').textContent = `${t('customer.table')} ${data.table.table_number}`;
 
     menuByItemId = new Map();
     for (const cat of data.categories) {
@@ -269,7 +281,10 @@ async function boot() {
     renderCartPanel();
   } catch (e) {
     $('root').innerHTML = '';
-    $('root').appendChild(el('div', { className: 'error', text: 'Network error: ' + e.message }));
+    $('root').appendChild(el('div', {
+      className: 'error',
+      text: `${t('customer.error_network')}: ${e.message}`,
+    }));
   }
 }
 
