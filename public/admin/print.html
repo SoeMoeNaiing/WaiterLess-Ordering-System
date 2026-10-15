@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Print QR codes</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 1rem; color: #000;
+    }
+    .toolbar {
+      display: flex; gap: 0.75rem; align-items: center;
+      margin-bottom: 1.5rem; padding: 0.75rem;
+      background: #f0f4ff; border-radius: 8px;
+    }
+    .toolbar h1 { margin: 0; font-size: 1.1rem; }
+    .toolbar button {
+      font: inherit; padding: 0.5rem 1rem; border: 1px solid #0a58ca;
+      background: #0a58ca; color: #fff; border-radius: 6px; cursor: pointer;
+    }
+    .toolbar .muted { color: #555; font-size: 0.9rem; margin-left: auto; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    .card {
+      border: 2px dashed #999;
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .card .table-name {
+      font-size: 1.4rem; font-weight: 700; margin-bottom: 0.25rem;
+    }
+    .card .table-label {
+      font-size: 0.85rem; color: #666; margin-bottom: 0.75rem;
+    }
+    .card img {
+      width: 200px; height: 200px; display: block; margin: 0 auto 0.75rem;
+    }
+    .card .hint {
+      font-size: 0.7rem; color: #888; word-break: break-all;
+      font-family: ui-monospace, monospace;
+    }
+    .card .callout {
+      font-size: 0.75rem; color: #333; margin-top: 0.5rem;
+    }
+
+    @media print {
+      body { margin: 0.5cm; }
+      .toolbar { display: none; }
+      .card { border: 1px solid #ccc; }
+      .grid { gap: 0.6cm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>QR codes</h1>
+    <button onclick="window.print()">Print</button>
+    <a href="/admin/#tables" style="color:#0a58ca;">← Back</a>
+    <span class="muted" id="count"></span>
+  </div>
+
+  <div class="grid" id="grid">
+    <p>Loading…</p>
+  </div>
+
+  <script>
+    async function boot() {
+      const grid = document.getElementById('grid');
+      try {
+        const res = await fetch('/api/admin/tables');
+        if (res.status === 401) {
+          grid.innerHTML = '<p>Please log in to the admin panel first, then come back to this page.</p>';
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const tables = await res.json();
+
+        if (tables.length === 0) {
+          grid.innerHTML = '<p>No tables yet. Add some in the admin panel.</p>';
+          return;
+        }
+
+        document.getElementById('count').textContent =
+          `${tables.length} table${tables.length === 1 ? '' : 's'}`;
+
+        grid.innerHTML = '';
+        for (const t of tables) {
+          if (!t.is_active) continue;
+          const url = `${window.location.origin}/t/${t.qr_token}`;
+
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <div class="table-name">${escapeHtml(t.table_number)}</div>
+            ${t.label ? `<div class="table-label">${escapeHtml(t.label)}</div>` : ''}
+            <img src="/api/admin/tables/${t.id}/qr.png?size=400" alt="QR for ${escapeHtml(t.table_number)}" />
+            <div class="callout">Scan to order</div>
+            <div class="hint">${escapeHtml(url)}</div>
+          `;
+          grid.appendChild(card);
+        }
+      } catch (e) {
+        grid.innerHTML = `<p>Error: ${escapeHtml(e.message)}</p>`;
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[c]);
+    }
+
+    boot();
+  </script>
+</body>
+</html>

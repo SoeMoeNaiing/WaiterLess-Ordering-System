@@ -60,3 +60,11 @@ test('GET /kitchen/kitchen.js returns JavaScript', async () => {
   assert.equal(res.status, 200);
   assert.match(res.headers['content-type'], /javascript/);
 });
+
+test('GET /admin/print.html serves the print page', async () => {
+  const app = createApp();
+  const res = await request(app).get('/admin/print.html');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /^text\/html/);
+  assert.match(res.text, /Print QR/);
+});
