@@ -19,6 +19,17 @@
     }
     header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
     header .table { margin-left: auto; font-size: 0.85rem; opacity: 0.9; }
+    .lang-select {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px;
+      font: inherit;
+      font-size: 0.8rem;
+      padding: 0.2rem 0.4rem;
+      cursor: pointer;
+    }
+    .lang-select option { color: #222; }
     main { padding: 1rem; max-width: 640px; margin: 0 auto; }
     h2 {
       font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;
@@ -92,7 +103,7 @@
       background: #fbeaec; color: #721c24; font-size: 0.9rem;
     }
     .confirmation { text-align: center; padding: 1rem 0; }
-    .confirmation .big { font-size: 2rem; margin-bottom: 0.5rem; }
+    .confirmation .big { font-size: 1.6rem; margin-bottom: 0.5rem; font-weight: 700; }
     .confirmation h3 { margin: 0 0 0.5rem; }
     .confirmation .total { font-size: 1.4rem; font-weight: 700; color: #198754; }
     .cart-panel .close {
@@ -106,27 +117,31 @@
   <header>
     <h1 id="restaurant">Menu</h1>
     <span class="table" id="table-label"></span>
+    <select id="lang-select" class="lang-select" aria-label="Language">
+      <option value="en">English</option>
+      <option value="my">မြန်မာ</option>
+    </select>
   </header>
   <main id="root">
-    <div class="loading">loading menu…</div>
+    <div class="loading" data-i18n="customer.loading">loading menu…</div>
   </main>
 
   <div id="cart-bar" class="cart-bar">
     <span class="count" id="cart-count">0</span>
-    <span>View cart</span>
+    <span data-i18n="customer.view_cart">View cart</span>
     <span class="total" id="cart-total"></span>
   </div>
 
   <div id="cart-panel" class="cart-panel">
     <div class="inner" id="cart-inner">
-      <h2 id="cart-title">Your cart</h2>
+      <h2 id="cart-title" data-i18n="customer.your_cart">Your cart</h2>
       <div id="cart-items"></div>
       <div id="cart-error" class="cart-error" style="display:none;"></div>
-      <button class="place-order" id="place-order">Place order</button>
-      <button class="close" id="cart-close">Close</button>
+      <button class="place-order" id="place-order" data-i18n="customer.place_order">Place order</button>
+      <button class="close" id="cart-close" data-i18n="customer.close">Close</button>
     </div>
   </div>
 
-  <script src="/customer/menu.js"></script>
+  <script type="module" src="/customer/menu.js"></script>
 </body>
 </html>

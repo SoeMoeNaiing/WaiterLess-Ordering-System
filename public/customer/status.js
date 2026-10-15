@@ -1,11 +1,12 @@
+import { initI18n, t, getLang, setLang, applyTranslations } from '/i18n/i18n.js';
+
 const $ = (id) => document.getElementById(id);
 
 function parseUrl() {
-  // /t/<token>/orders  OR  /t/<token>/order/<id>
-  let m = window.location.pathname.match(/^\/t\/([^/?#]+)\/orders\/?$/);
-  if (m) return { token: m[1], mode: 'list' };
-  m = window.location.pathname.match(/^\/t\/([^/?#]+)\/order\/([^/?#]+)/);
-  if (m) return { token: m[1], orderId: m[2], mode: 'single' };
+  const list = window.location.pathname.match(/^\/t\/([^/?#]+)\/orders\/?$/);
+  if (list) return { token: list[1] };
+  const single = window.location.pathname.match(/^\/t\/([^/?#]+)\/order\/([^/?#]+)/);
+  if (single) return { token: single[1], redirectFromSingle: true };
   return null;
 }
 
@@ -31,11 +32,11 @@ function formatPrice(n) {
 function timeAgo(sqlTimestamp) {
   const iso = sqlTimestamp.replace(' ', 'T') + 'Z';
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins === 1) return '1 min ago';
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1) return t('status.just_now');
+  if (mins === 1) return `1 ${t('status.min_ago')}`;
+  if (mins < 60) return `${mins} ${t('status.min_ago')}`;
   const hrs = Math.floor(mins / 60);
-  return hrs === 1 ? '1 hour ago' : `${hrs} hours ago`;
+  return hrs === 1 ? `1 ${t('status.hour_ago')}` : `${hrs} ${t('status.hours_ago')}`;
 }
 
 function statusInfo(status) {
@@ -43,11 +44,11 @@ function statusInfo(status) {
     case 'placed':
     case 'preparing':
     case 'ready':
-      return { label: 'Order confirmed', sub: 'Being prepared', cls: 'st-placed' };
+      return { label: t('status.confirmed'), sub: t('status.preparing'), cls: 'st-placed' };
     case 'served':
-      return { label: 'Served', sub: 'Enjoy your meal', cls: 'st-served' };
+      return { label: t('status.served'), sub: t('status.enjoy'), cls: 'st-served' };
     case 'cancelled':
-      return { label: 'Order rejected', sub: 'Please speak to a staff member', cls: 'st-cancelled' };
+      return { label: t('status.rejected'), sub: t('status.rejected_hint'), cls: 'st-cancelled' };
     default:
       return { label: status, sub: '', cls: '' };
   }
@@ -62,12 +63,13 @@ function renderOrderCard(order) {
   ]);
 
   const meta = el('div', { className: 'order-meta' }, [
-    el('span', { className: 'order-id', text: `Order #${order.id}` }),
+    el('span', { className: 'order-id', text: `${t('status.order')} #${order.id}` }),
     el('span', { className: 'order-time', text: timeAgo(order.created_at) }),
   ]);
 
+  const items = order.items || [];
   const list = el('ul', { className: 'items' });
-  for (const it of order.items) {
+  for (const it of items) {
     list.appendChild(el('li', {}, [
       el('span', { className: 'qty', text: `${it.qty}\u00d7` }),
       el('span', { className: 'name', text: it.name_snapshot }),
@@ -76,7 +78,7 @@ function renderOrderCard(order) {
   }
 
   const total = el('div', { className: 'total-row' }, [
-    el('span', { text: 'Total' }),
+    el('span', { text: t('status.total') }),
     el('span', { text: formatPrice(order.total) }),
   ]);
 
@@ -91,7 +93,7 @@ function render(orders, token) {
     root.appendChild(el('div', {
       className: 'card',
       style: 'text-align:center; color:#888; padding: 2rem 1rem;',
-      text: 'No orders yet. Go back to the menu to place one.',
+      text: t('status.no_orders'),
     }));
   } else {
     const grid = el('div', { className: 'orders-grid' });
@@ -101,14 +103,9 @@ function render(orders, token) {
 
   root.appendChild(el('button', {
     className: 'order-more',
-    text: 'Order more',
+    text: t('customer.order_more'),
     onclick: () => { window.location.href = `/t/${token}`; },
   }));
-}
-
-function renderSingle(order, token) {
-  // Fallback for old /t/<token>/order/<id> bookmarks
-  render([order], token);
 }
 
 let lastSnapshot = '';
@@ -117,56 +114,55 @@ async function refresh() {
   const parsed = parseUrl();
   if (!parsed) {
     $('root').innerHTML = '';
-    $('root').appendChild(el('div', { className: 'error', text: 'Invalid URL.' }));
+    $('root').appendChild(el('div', { className: 'error', text: t('customer.error_url') }));
+    return;
+  }
+
+  if (parsed.redirectFromSingle) {
+    window.location.replace(`/t/${parsed.token}/orders`);
     return;
   }
 
   try {
-    if (parsed.mode === 'list') {
-      const res = await fetch(`/api/customer/orders?token=${encodeURIComponent(parsed.token)}`);
-      if (!res.ok) {
-        let msg = 'Could not load orders.';
-        if (res.status === 404) msg = 'Table not found.';
-        else if (res.status === 410) msg = 'This table is no longer active.';
-        $('root').innerHTML = '';
-        $('root').appendChild(el('div', { className: 'error', text: msg }));
-        return;
-      }
-      const data = await res.json();
-      $('table-label').textContent = `Table ${data.table.table_number}`;
+    const res = await fetch(`/api/customer/orders?token=${encodeURIComponent(parsed.token)}`);
+    if (!res.ok) {
+      let msg = t('status.error_generic');
+      if (res.status === 404) msg = t('customer.error_404');
+      else if (res.status === 410) msg = t('customer.error_410');
+      $('root').innerHTML = '';
+      $('root').appendChild(el('div', { className: 'error', text: msg }));
+      return;
+    }
+    const data = await res.json();
+    $('table-label').textContent = `${t('customer.table')} ${data.table.table_number}`;
 
-      // Cheap change detection: hash the ids+statuses
-      const sig = data.orders.map((o) => `${o.id}:${o.status}:${o.updated_at}`).join('|');
-      if (sig !== lastSnapshot) {
-        render(data.orders, parsed.token);
-        lastSnapshot = sig;
-      }
-    } else {
-      // single order mode
-      const res = await fetch(
-        `/api/customer/orders/${parsed.orderId}?token=${encodeURIComponent(parsed.token)}`
-      );
-      if (!res.ok) {
-        let msg = 'Could not load order.';
-        if (res.status === 404) msg = 'Order not found.';
-        else if (res.status === 410) msg = 'This table is no longer active.';
-        $('root').innerHTML = '';
-        $('root').appendChild(el('div', { className: 'error', text: msg }));
-        return;
-      }
-      const data = await res.json();
-      $('table-label').textContent = `Order #${data.order.id}`;
-      const sig = `${data.order.id}:${data.order.status}:${data.order.updated_at}`;
-      if (sig !== lastSnapshot) {
-        renderSingle(data.order, parsed.token);
-        lastSnapshot = sig;
-      }
+    const sig = data.orders.map((o) => `${o.id}:${o.status}:${o.updated_at}`).join('|');
+    if (sig !== lastSnapshot) {
+      render(data.orders, parsed.token);
+      lastSnapshot = sig;
     }
   } catch (e) {
     $('root').innerHTML = '';
-    $('root').appendChild(el('div', { className: 'error', text: 'Network error: ' + e.message }));
+    $('root').appendChild(el('div', { className: 'error', text: `${t('customer.error_network')}: ${e.message}` }));
   }
 }
 
-refresh();
-setInterval(refresh, 3000);
+async function boot() {
+  await initI18n();
+  applyTranslations();
+
+  const langSelect = $('lang-select');
+  if (langSelect) {
+    langSelect.value = getLang();
+    langSelect.addEventListener('change', async (e) => {
+      await setLang(e.target.value);
+      lastSnapshot = ''; // force re-render with new language
+      refresh();
+    });
+  }
+
+  refresh();
+  setInterval(refresh, 3000);
+}
+
+boot();
