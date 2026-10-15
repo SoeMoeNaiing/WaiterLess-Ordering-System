@@ -29,6 +29,7 @@ export function createApp({ db } = {}) {
   app.use('/admin', express.static('public/admin'));
   app.use('/customer', express.static('public/customer'));
   app.use('/kitchen', express.static('public/kitchen'));
+  app.use('/i18n', express.static('public/i18n'));
 
   app.get('/', (req, res) => res.redirect('/admin/'));
 
