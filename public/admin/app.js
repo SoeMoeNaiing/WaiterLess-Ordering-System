@@ -140,12 +140,22 @@ function renderTable(t) {
     },
   });
 
-    const clear = el('button', {
+     const clear = el('button', {
     text: 'Clear session',
     onclick: async () => {
       if (!confirm(`Clear session for ${t.table_number}? Customer will no longer see previous orders.`)) return;
       const res = await api(`/api/admin/tables/${t.id}/clear-session`, { method: 'POST' });
-      alert(`Cleared ${res.cleared} order(s).`);
+
+      if (res.in_progress_count > 0) {
+        alert(
+          `Cleared ${res.cleared} order(s).\n\n` +
+          `Warning: ${res.in_progress_count} order(s) are still in the kitchen. ` +
+          `The customer can no longer see them on their status page. ` +
+          `If you want them visible to the customer, do not clear the session until they are served.`
+        );
+      } else {
+        alert(`Cleared ${res.cleared} order(s).`);
+      }
       await refresh();
     },
   });
