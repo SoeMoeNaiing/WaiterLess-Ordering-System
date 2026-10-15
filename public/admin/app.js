@@ -544,7 +544,27 @@ async function changePin(target) {
     msg.style.color = '#b02a37';
   }
 }
+// ---------- Tabs ----------
 
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === name);
+  });
+  document.querySelectorAll('.panel').forEach((p) => {
+    p.classList.toggle('active', p.dataset.panel === name);
+  });
+  if (window.location.hash !== '#' + name) {
+    history.replaceState(null, '', '#' + name);
+  }
+}
+
+document.querySelectorAll('.tab').forEach((t) => {
+  t.onclick = () => showTab(t.dataset.tab);
+});
+
+// Restore last tab from the URL hash on load; default dashboard.
+const initialTab = (window.location.hash || '#dashboard').slice(1);
+showTab(initialTab);
 // ---------- Boot ----------
 
 $('pin-submit').onclick = login;

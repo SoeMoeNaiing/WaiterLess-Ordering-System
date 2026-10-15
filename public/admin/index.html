@@ -32,13 +32,13 @@
     button.primary:hover { background: #084cb0; }
     button.danger { color: #b02a37; border-color: #b02a37; }
     button.danger:hover { background: #fbeaec; }
-    .actions { display: flex; gap: 0.5rem; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     input[type="text"], input[type="password"], input[type="number"], select {
       font: inherit; padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 6px;
     }
     input[type="text"], input[type="password"] { width: 100%; }
-    .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-    .form-row input { flex: 1; }
+    .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .form-row input { flex: 1; min-width: 8rem; }
     .muted { color: #888; font-size: 0.9rem; }
     .error { color: #b02a37; }
     .thumb { width: 64px; height: 64px; object-fit: cover; border: 1px solid #eee; border-radius: 4px; background: #f8f8f8; }
@@ -60,6 +60,32 @@
       margin-bottom: 1rem;
     }
     .app-header h1 { margin: 0; }
+
+    /* Tabs */
+    .tabs {
+      display: flex; gap: 0.15rem; margin-bottom: 1rem;
+      border-bottom: 2px solid #e0e0e0; flex-wrap: wrap;
+    }
+    .tab {
+      background: none; border: none; padding: 0.6rem 1rem;
+      font: inherit; font-weight: 600; color: #666;
+      cursor: pointer; border-radius: 0;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab:hover { background: none; color: #0a58ca; }
+    .tab.active { color: #0a58ca; border-bottom-color: #0a58ca; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Dashboard stat tiles */
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem; margin-bottom: 1rem;
+    }
+    .stat { text-align: center; }
+    .stat .num { font-size: 2rem; font-weight: 700; }
+    .stat .lbl { color: #888; font-size: 0.85rem; }
   </style>
 </head>
 <body>
@@ -75,118 +101,145 @@
 
   <!-- Main app view -->
   <section id="app-view">
-
     <div class="app-header">
       <h1>Admin</h1>
       <button id="logout-btn" class="danger">Log out</button>
     </div>
 
     <p class="muted" id="status">loading…</p>
-        <div class="card">
-      <h2>Dashboard — today</h2>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
-        <div style="text-align: center;">
-          <div style="font-size: 2rem; font-weight: 700; color: #0a58ca;" id="dash-completed">—</div>
-          <div class="muted">Served</div>
+
+    <nav class="tabs">
+      <button class="tab" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="tables">Tables</button>
+      <button class="tab" data-tab="menu">Menu</button>
+      <button class="tab" data-tab="orders">Orders</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <!-- ============ PANEL: DASHBOARD ============ -->
+    <section class="panel" data-panel="dashboard">
+      <div class="card">
+        <h2>Today</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="num" style="color:#0a58ca;" id="dash-completed">—</div>
+            <div class="lbl">Served</div>
+          </div>
+          <div class="stat">
+            <div class="num" style="color:#ffc107;" id="dash-progress">—</div>
+            <div class="lbl">In progress</div>
+          </div>
+          <div class="stat">
+            <div class="num" style="color:#198754;" id="dash-sales">—</div>
+            <div class="lbl">Sales</div>
+          </div>
+          <div class="stat">
+            <div class="num" style="color:#666;" id="dash-avg">—</div>
+            <div class="lbl">Avg order</div>
+          </div>
         </div>
-        <div style="text-align: center;">
-          <div style="font-size: 2rem; font-weight: 700; color: #ffc107;" id="dash-progress">—</div>
-          <div class="muted">In progress</div>
+        <h2 style="margin-top: 1rem;">Top items today</h2>
+        <div id="dash-top"><p class="muted">loading…</p></div>
+      </div>
+    </section>
+
+    <!-- ============ PANEL: TABLES ============ -->
+    <section class="panel" data-panel="tables">
+      <div class="card">
+        <h2>Add table</h2>
+        <div class="form-row">
+          <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" />
+          <input id="new-table-label" type="text" placeholder="Label (optional)" />
+          <button id="add-table" class="primary">Add</button>
         </div>
-        <div style="text-align: center;">
-          <div style="font-size: 2rem; font-weight: 700; color: #198754;" id="dash-sales">—</div>
-          <div class="muted">Sales</div>
+        <p id="add-error" class="error"></p>
+      </div>
+
+      <div class="card">
+        <h2>Tables</h2>
+        <div id="tables"><p class="muted">loading…</p></div>
+      </div>
+    </section>
+
+    <!-- ============ PANEL: MENU ============ -->
+    <section class="panel" data-panel="menu">
+      <div class="card">
+        <h2>Categories</h2>
+        <div class="form-row">
+          <input id="new-category-name" type="text" placeholder="Category name" />
+          <input id="new-category-order" type="number" placeholder="Order" value="0" style="max-width: 6rem;" />
+          <button id="add-category" class="primary">Add</button>
         </div>
-        <div style="text-align: center;">
-          <div style="font-size: 2rem; font-weight: 700; color: #666;" id="dash-avg">—</div>
-          <div class="muted">Avg order</div>
+        <p id="add-category-error" class="error"></p>
+        <div id="categories"><p class="muted">loading…</p></div>
+      </div>
+
+      <div class="card">
+        <h2>Menu items</h2>
+        <div class="form-row">
+          <input id="new-item-name" type="text" placeholder="Item name" />
+          <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" />
+          <select id="new-item-category" style="flex: 1; min-width: 8rem;"></select>
+          <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 12rem;" />
+          <button id="add-item" class="primary">Add</button>
         </div>
+        <p id="add-item-error" class="error"></p>
+        <div id="menu-items"><p class="muted">loading…</p></div>
       </div>
-      <h2 style="margin-top: 1rem;">Top items today</h2>
-      <div id="dash-top"><p class="muted">loading…</p></div>
-    </div>
+    </section>
 
-    <div class="card">
-      <h2>Add table</h2>
-      <div class="form-row">
-        <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" />
-        <input id="new-table-label" type="text" placeholder="Label (optional)" />
-        <button id="add-table" class="primary">Add</button>
+    <!-- ============ PANEL: ORDERS ============ -->
+    <section class="panel" data-panel="orders">
+      <div class="card">
+        <h2>Order history</h2>
+        <div class="form-row">
+          <button id="hist-today">Today</button>
+          <button id="hist-week">Last 7 days</button>
+          <button id="hist-month">Last 30 days</button>
+          <button id="hist-all">All</button>
+        </div>
+        <p class="muted" id="hist-summary">Pick a range.</p>
+        <div id="hist-list"></div>
       </div>
-      <p id="add-error" class="error"></p>
-    </div>
+    </section>
 
-    <div class="card">
-      <h2>Categories</h2>
-      <div class="form-row">
-        <input id="new-category-name" type="text" placeholder="Category name" />
-        <input id="new-category-order" type="number" placeholder="Order" value="0" style="max-width: 6rem;" />
-        <button id="add-category" class="primary">Add</button>
-      </div>
-      <p id="add-category-error" class="error"></p>
-      <div id="categories"><p class="muted">loading…</p></div>
-    </div>
-
-    <div class="card">
-      <h2>Menu items</h2>
-      <div class="form-row">
-        <input id="new-item-name" type="text" placeholder="Item name" />
-        <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" />
-        <select id="new-item-category" style="flex: 1;"></select>
-        <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 12rem;" />
-        <button id="add-item" class="primary">Add</button>
-      </div>
-      <p id="add-item-error" class="error"></p>
-      <div id="menu-items"><p class="muted">loading…</p></div>
-    </div>
-
-    <div class="card">
-      <h2>Tables</h2>
-      <div id="tables"><p class="muted">loading…</p></div>
-    </div>
-    <div class="card">
-      <h2>Order history</h2>
-      <div class="form-row">
-        <button id="hist-today">Today</button>
-        <button id="hist-week">Last 7 days</button>
-        <button id="hist-month">Last 30 days</button>
-        <button id="hist-all">All</button>
-      </div>
-      <p class="muted" id="hist-summary">Pick a range.</p>
-      <div id="hist-list"></div>
-    </div>
-        <div class="card">
-      <h2>Settings</h2>
-      <div class="form-row">
-        <input id="setting-restaurant-name" type="text" placeholder="Restaurant name" />
-      </div>
-      <div class="form-row">
-        <input id="setting-currency" type="text" placeholder="Currency (e.g. MMK)" style="max-width: 8rem;" />
-        <input id="setting-default-language" type="text" placeholder="Language (en, my)" style="max-width: 8rem;" />
-        <button id="save-settings" class="primary">Save</button>
-      </div>
-      <p id="settings-message" class="muted" style="min-height: 1.2rem;"></p>
-    </div>
-        <div class="card">
-      <h2>Security</h2>
-      <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
-
-      <div class="form-row" style="margin-top: 0.75rem;">
-        <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
+    <!-- ============ PANEL: SETTINGS ============ -->
+    <section class="panel" data-panel="settings">
+      <div class="card">
+        <h2>Settings</h2>
+        <div class="form-row">
+          <input id="setting-restaurant-name" type="text" placeholder="Restaurant name" />
+        </div>
+        <div class="form-row">
+          <input id="setting-currency" type="text" placeholder="Currency (e.g. MMK)" style="max-width: 8rem;" />
+          <input id="setting-default-language" type="text" placeholder="Language (en, my)" style="max-width: 8rem;" />
+          <button id="save-settings" class="primary">Save</button>
+        </div>
+        <p id="settings-message" class="muted" style="min-height: 1.2rem;"></p>
       </div>
 
-      <div class="form-row">
-        <input id="new-admin-pin" type="password" inputmode="numeric" placeholder="New admin PIN (4-12 digits)" />
-        <button id="change-admin-pin" class="primary">Change admin PIN</button>
-      </div>
+      <div class="card">
+        <h2>Security</h2>
+        <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
 
-      <div class="form-row">
-        <input id="new-kitchen-pin" type="password" inputmode="numeric" placeholder="New kitchen PIN (4-12 digits)" />
-        <button id="change-kitchen-pin" class="primary">Change kitchen PIN</button>
-      </div>
+        <div class="form-row" style="margin-top: 0.75rem;">
+          <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
+        </div>
 
-      <p id="security-message" class="muted" style="min-height: 1.2rem;"></p>
-    </div>
+        <div class="form-row">
+          <input id="new-admin-pin" type="password" inputmode="numeric" placeholder="New admin PIN (4-12 digits)" />
+          <button id="change-admin-pin" class="primary">Change admin PIN</button>
+        </div>
+
+        <div class="form-row">
+          <input id="new-kitchen-pin" type="password" inputmode="numeric" placeholder="New kitchen PIN (4-12 digits)" />
+          <button id="change-kitchen-pin" class="primary">Change kitchen PIN</button>
+        </div>
+
+        <p id="security-message" class="muted" style="min-height: 1.2rem;"></p>
+      </div>
+    </section>
+
   </section>
 
   <script src="/admin/app.js"></script>
