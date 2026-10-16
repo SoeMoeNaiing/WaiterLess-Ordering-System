@@ -15,35 +15,42 @@
 
   <div id="toast-container"></div>
 
+  <!-- ============ LOGIN ============ -->
   <section id="login-view">
-    <h1>Admin</h1>
-    <p>Enter the admin PIN</p>
+    <h1 data-i18n="admin.title">Admin</h1>
+    <p data-i18n="admin.login_prompt">Enter the admin PIN</p>
     <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" />
-    <button id="pin-submit">Log in</button>
+    <button id="pin-submit" data-i18n="admin.login_button">Log in</button>
     <div id="pin-error" class="error"></div>
     <p class="muted" style="margin-top: 2rem; font-size: 0.8rem;">Press <kbd>?</kbd> for shortcuts</p>
   </section>
 
+  <!-- ============ APP ============ -->
   <section id="app-view">
+
     <header class="topbar">
       <button class="menu-toggle" id="menu-toggle" title="Menu">☰</button>
       <div class="brand">
         <span id="brand-name">Restaurant</span>
-        <span class="sub">Admin</span>
+        <span class="sub" data-i18n="admin.sub">Admin</span>
       </div>
       <div class="spacer"></div>
-      <button id="help-btn" class="icon-btn" title="Keyboard shortcuts (?)">?</button>
-      <button id="logout-btn" class="logout-btn">Log out</button>
+      <select id="lang-select-admin" class="lang-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="my">မြန်မာ</option>
+      </select>
+      <button id="help-btn" class="icon-btn" title="Keyboard shortcuts (?)" data-i18n-title="admin.help">?</button>
+      <button id="logout-btn" class="logout-btn" data-i18n="admin.logout">Log out</button>
     </header>
 
     <aside class="sidebar" id="sidebar">
       <nav>
-        <button class="tab" data-tab="dashboard"><span class="tab-key">1</span> Dashboard</button>
-        <button class="tab" data-tab="tables"><span class="tab-key">2</span> Tables</button>
-        <button class="tab" data-tab="menu"><span class="tab-key">3</span> Menu</button>
-        <button class="tab" data-tab="live"><span class="tab-key">4</span> Live orders <span class="tab-badge" id="live-badge" style="display:none;">0</span></button>
-        <button class="tab" data-tab="orders"><span class="tab-key">5</span> Order history</button>
-        <button class="tab" data-tab="settings"><span class="tab-key">6</span> Settings</button>
+        <button class="tab" data-tab="dashboard"><span class="tab-key">1</span> <span data-i18n="admin.tab_dashboard">Dashboard</span></button>
+        <button class="tab" data-tab="tables"><span class="tab-key">2</span> <span data-i18n="admin.tab_tables">Tables</span></button>
+        <button class="tab" data-tab="menu"><span class="tab-key">3</span> <span data-i18n="admin.tab_menu">Menu</span></button>
+        <button class="tab" data-tab="live"><span class="tab-key">4</span> <span data-i18n="admin.tab_live">Live orders</span> <span class="tab-badge" id="live-badge" style="display:none;">0</span></button>
+        <button class="tab" data-tab="orders"><span class="tab-key">5</span> <span data-i18n="admin.tab_orders">Order history</span></button>
+        <button class="tab" data-tab="settings"><span class="tab-key">6</span> <span data-i18n="admin.tab_settings">Settings</span></button>
       </nav>
       <div class="sidebar-hint">
         <kbd>1</kbd>–<kbd>6</kbd> tabs · <kbd>R</kbd> refresh · <kbd>?</kbd> help
@@ -53,75 +60,79 @@
     <main class="content">
       <h1 class="page-title" id="page-title">Dashboard</h1>
 
+      <!-- ============ PANEL: DASHBOARD ============ -->
       <section class="panel" data-panel="dashboard">
         <div class="toolbar">
           <span class="muted" id="dash-updated">—</span>
-          <button id="dash-refresh">Refresh (R)</button>
+          <button id="dash-refresh" data-i18n="admin.refresh">Refresh</button>
         </div>
         <div class="stats">
-          <div class="stat"><div class="num" id="dash-completed">—</div><div class="lbl">Served</div></div>
-          <div class="stat warn"><div class="num" id="dash-progress">—</div><div class="lbl">In progress</div></div>
-          <div class="stat success"><div class="num" id="dash-sales">—</div><div class="lbl">Sales</div></div>
-          <div class="stat muted"><div class="num" id="dash-avg">—</div><div class="lbl">Avg order</div></div>
+          <div class="stat"><div class="num" id="dash-completed">—</div><div class="lbl" data-i18n="admin.served">Served</div></div>
+          <div class="stat warn"><div class="num" id="dash-progress">—</div><div class="lbl" data-i18n="admin.in_progress">In progress</div></div>
+          <div class="stat success"><div class="num" id="dash-sales">—</div><div class="lbl" data-i18n="admin.sales">Sales</div></div>
+          <div class="stat muted"><div class="num" id="dash-avg">—</div><div class="lbl" data-i18n="admin.avg_order">Avg order</div></div>
         </div>
         <div class="card">
-          <h2>Top items today</h2>
+          <h2 data-i18n="admin.top_items">Top items today</h2>
           <div id="dash-top"><p class="muted">loading…</p></div>
         </div>
       </section>
 
+      <!-- ============ PANEL: TABLES ============ -->
       <section class="panel" data-panel="tables">
         <div class="card">
-          <h2>Add table</h2>
+          <h2 data-i18n="admin.add_table">Add table</h2>
           <div class="form-row">
-            <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" />
-            <input id="new-table-label" type="text" placeholder="Label (optional)" />
-            <button id="add-table" class="primary">Add</button>
+            <input id="new-table-number" type="text" placeholder="Table number (e.g. T1)" data-i18n-placeholder="admin.table_number" />
+            <input id="new-table-label" type="text" placeholder="Label (optional)" data-i18n-placeholder="admin.table_label" />
+            <button id="add-table" class="primary" data-i18n="admin.add">Add</button>
           </div>
           <p id="add-error" class="error"></p>
         </div>
         <div class="card">
           <div class="card-head-row">
-            <h2 style="margin:0;">Tables</h2>
-            <a href="/admin/print.html" target="_blank" class="link-button">Print all QR codes →</a>
+            <h2 style="margin:0;" data-i18n="admin.tables_list">Tables</h2>
+            <a href="/admin/print.html" target="_blank" class="link-button" data-i18n="admin.print_all_qr">Print all QR codes →</a>
           </div>
           <div id="tables"><p class="muted">loading…</p></div>
         </div>
       </section>
 
+      <!-- ============ PANEL: MENU ============ -->
       <section class="panel" data-panel="menu">
         <div class="card">
-          <h2>Categories</h2>
+          <h2 data-i18n="admin.categories">Categories</h2>
           <div class="form-row">
-            <input id="new-category-name" type="text" placeholder="Category name" />
+            <input id="new-category-name" type="text" placeholder="Category name" data-i18n-placeholder="admin.category_name" />
             <input id="new-category-order" type="number" placeholder="Order" value="0" style="max-width: 6rem;" />
-            <button id="add-category" class="primary">Add</button>
+            <button id="add-category" class="primary" data-i18n="admin.add">Add</button>
           </div>
           <p id="add-category-error" class="error"></p>
           <div id="categories"><p class="muted">loading…</p></div>
         </div>
         <div class="card">
-          <h2>Menu items</h2>
+          <h2 data-i18n="admin.menu_items">Menu items</h2>
           <div class="form-row">
-            <input id="new-item-name" type="text" placeholder="Item name" />
-            <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" />
+            <input id="new-item-name" type="text" placeholder="Item name" data-i18n-placeholder="admin.item_name" />
+            <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" data-i18n-placeholder="admin.item_price" />
             <select id="new-item-category" style="flex: 1; min-width: 8rem;"></select>
             <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 12rem;" />
-            <button id="add-item" class="primary">Add</button>
+            <button id="add-item" class="primary" data-i18n="admin.add">Add</button>
           </div>
           <p id="add-item-error" class="error"></p>
           <div id="menu-items"><p class="muted">loading…</p></div>
         </div>
       </section>
 
+      <!-- ============ PANEL: LIVE ORDERS ============ -->
       <section class="panel" data-panel="live">
         <div class="card kitchen-card">
-          <h2>Kitchen display</h2>
-          <p class="muted">Open this URL on another device on the same Wi-Fi to give kitchen staff their own screen.</p>
+          <h2 data-i18n="admin.kitchen_display">Kitchen display</h2>
+          <p class="muted" data-i18n="admin.kitchen_url_hint">Open this URL on another device on the same Wi-Fi to give kitchen staff their own screen.</p>
           <div class="kitchen-url-row">
             <code id="kitchen-url">…</code>
-            <button id="copy-kitchen-url">Copy</button>
-            <a id="open-kitchen-url" href="/kitchen/" target="_blank" class="link-button">Open</a>
+            <button id="copy-kitchen-url" data-i18n="admin.copy">Copy</button>
+            <a id="open-kitchen-url" href="/kitchen/" target="_blank" class="link-button" data-i18n="admin.open">Open</a>
           </div>
           <p class="muted" style="font-size:0.8rem; margin-top:0.5rem;">
             Default kitchen PIN is <code>1234</code> — change it in Settings → Security.
@@ -129,8 +140,8 @@
         </div>
 
         <div class="card">
-          <h2>Live orders</h2>
-          <p class="muted">Confirm new orders, mark served, or reject.</p>
+          <h2 data-i18n="admin.live_orders">Live orders</h2>
+          <p class="muted" data-i18n="admin.live_hint">Confirm new orders, mark served, or reject.</p>
           <div id="live-list"><p class="muted">loading…</p></div>
           <p class="muted shortcut-hint">
             Shortcuts: <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>C</kbd> confirm ·
@@ -139,42 +150,44 @@
         </div>
       </section>
 
+      <!-- ============ PANEL: ORDERS ============ -->
       <section class="panel" data-panel="orders">
         <div class="card">
-          <h2>Order history</h2>
+          <h2 data-i18n="admin.order_history">Order history</h2>
           <div class="form-row">
-            <button id="hist-today">Today</button>
-            <button id="hist-week">Last 7 days</button>
-            <button id="hist-month">Last 30 days</button>
-            <button id="hist-all">All time</button>
+            <button id="hist-today" data-i18n="admin.today">Today</button>
+            <button id="hist-week" data-i18n="admin.last_7">Last 7 days</button>
+            <button id="hist-month" data-i18n="admin.last_30">Last 30 days</button>
+            <button id="hist-all" data-i18n="admin.all_time">All time</button>
           </div>
           <div class="form-row">
-            <label class="form-label">From</label>
+            <label class="form-label" data-i18n="admin.from">From</label>
             <input id="hist-from" type="date" style="flex:0 0 auto;" />
-            <label class="form-label">To</label>
+            <label class="form-label" data-i18n="admin.to">To</label>
             <input id="hist-to" type="date" style="flex:0 0 auto;" />
-            <button id="hist-apply" class="primary">Apply</button>
+            <button id="hist-apply" class="primary" data-i18n="admin.apply">Apply</button>
           </div>
           <p class="muted" id="hist-summary">loading…</p>
           <div id="hist-list"></div>
         </div>
       </section>
 
+      <!-- ============ PANEL: SETTINGS ============ -->
       <section class="panel" data-panel="settings">
         <div class="card">
-          <h2>Restaurant settings</h2>
+          <h2 data-i18n="admin.settings">Restaurant settings</h2>
           <div class="form-row">
             <input id="setting-restaurant-name" type="text" placeholder="Restaurant name" />
           </div>
           <div class="form-row">
             <input id="setting-currency" type="text" placeholder="Currency (e.g. MMK)" style="max-width: 8rem;" />
             <input id="setting-default-language" type="text" placeholder="Language (en, my)" style="max-width: 8rem;" />
-            <button id="save-settings" class="primary">Save</button>
+            <button id="save-settings" class="primary" data-i18n="admin.save">Save</button>
           </div>
           <p id="settings-message" class="muted" style="min-height: 1.2rem;"></p>
         </div>
         <div class="card">
-          <h2>Security</h2>
+          <h2 data-i18n="admin.security">Security</h2>
           <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
           <div class="form-row" style="margin-top: 0.75rem;">
             <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
@@ -194,6 +207,7 @@
     </main>
   </section>
 
+  <!-- ============ HELP MODAL ============ -->
   <div id="help-modal" class="modal">
     <div class="modal-inner">
       <h2>Keyboard shortcuts</h2>
@@ -221,6 +235,6 @@
     </div>
   </div>
 
-  <script src="/admin/app.js?v=12"></script>
+  <script type="module" src="/admin/app.js?v=15"></script>
 </body>
 </html>

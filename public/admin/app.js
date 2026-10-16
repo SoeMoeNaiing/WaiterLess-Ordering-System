@@ -1,13 +1,15 @@
+import { initI18n, t, getLang, setLang, applyTranslations } from '/i18n/i18n.js';
+
 const $ = (id) => document.getElementById(id);
 
 const TAB_ORDER = ['dashboard', 'tables', 'menu', 'live', 'orders', 'settings'];
 const PAGE_TITLES = {
-  dashboard: 'Dashboard',
-  tables: 'Tables',
-  menu: 'Menu',
-  live: 'Live orders',
-  orders: 'Order history',
-  settings: 'Settings',
+  dashboard: 'admin.tab_dashboard',
+  tables:    'admin.tab_tables',
+  menu:      'admin.tab_menu',
+  live:      'admin.tab_live',
+  orders:    'admin.tab_orders',
+  settings:  'admin.tab_settings',
 };
 
 let isLoggedIn = false;
@@ -21,10 +23,7 @@ async function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
-  if (res.status === 401) {
-    showLogin();
-    throw new Error('unauthorized');
-  }
+  if (res.status === 401) { showLogin(); throw new Error('unauthorized'); }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { msg = (await res.json()).error || msg; } catch {}
@@ -53,26 +52,24 @@ function el(tag, attrs = {}, children = []) {
 function toast(message, kind = 'info') {
   const container = $('toast-container');
   if (!container) { console.log('[toast]', message); return; }
-  const t = document.createElement('div');
-  t.className = `toast toast-${kind}`;
-  t.textContent = message;
-  container.appendChild(t);
-  requestAnimationFrame(() => t.classList.add('toast-show'));
+  const box = document.createElement('div');
+  box.className = `toast toast-${kind}`;
+  box.textContent = message;
+  container.appendChild(box);
+  requestAnimationFrame(() => box.classList.add('toast-show'));
   setTimeout(() => {
-    t.classList.remove('toast-show');
-    setTimeout(() => t.remove(), 250);
+    box.classList.remove('toast-show');
+    setTimeout(() => box.remove(), 250);
   }, 2800);
 }
 
-function isTyping(el) {
-  if (!el) return false;
-  const t = el.tagName;
-  return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || el.isContentEditable;
+function isTyping(e) {
+  if (!e) return false;
+  const tag = e.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.isContentEditable;
 }
 
-function ymd(date) {
-  return date.toLocaleDateString('en-CA');
-}
+function ymd(date) { return date.toLocaleDateString('en-CA'); }
 
 // ---------- Auth ----------
 
@@ -131,35 +128,35 @@ async function refresh() {
     root.appendChild(el('p', { className: 'muted', text: 'No tables yet. Add one above.' }));
     return;
   }
-  for (const t of tables) root.appendChild(renderTable(t));
+  for (const tbl of tables) root.appendChild(renderTable(tbl));
 }
 
-function renderTable(t) {
-  const img = el('img', { src: `/api/admin/tables/${t.id}/qr.png?size=192`, alt: `QR for ${t.table_number}` });
+function renderTable(tbl) {
+  const img = el('img', { src: `/api/admin/tables/${tbl.id}/qr.png?size=192`, alt: `QR for ${tbl.table_number}` });
 
-  const orderBadge = t.active_orders_count > 0
-    ? el('span', { className: 'badge warn', text: `${t.active_orders_count} active` })
+  const orderBadge = tbl.active_orders_count > 0
+    ? el('span', { className: 'badge warn', text: `${tbl.active_orders_count} active` })
     : el('span', { className: 'badge idle', text: 'idle' });
 
   const info = el('div', { className: 'info' }, [
     el('div', { className: 'num' }, [
-      t.table_number,
+      tbl.table_number,
       el('span', {
-        className: `badge ${t.is_active ? 'on' : 'off'}`,
-        text: t.is_active ? 'active' : 'inactive',
+        className: `badge ${tbl.is_active ? 'on' : 'off'}`,
+        text: tbl.is_active ? 'active' : 'inactive',
       }),
       orderBadge,
     ]),
-    t.label ? el('div', { className: 'label', text: t.label }) : null,
-    el('div', { className: 'token', text: t.qr_token }),
+    tbl.label ? el('div', { className: 'label', text: tbl.label }) : null,
+    el('div', { className: 'token', text: tbl.qr_token }),
   ]);
 
   const regen = el('button', {
-    text: 'Regenerate QR',
+    text: t('admin.regenerate_qr'),
     onclick: async () => {
-      if (!confirm(`Regenerate QR for ${t.table_number}? The old QR code will stop working.`)) return;
+      if (!confirm(`Regenerate QR for ${tbl.table_number}?`)) return;
       try {
-        await api(`/api/admin/tables/${t.id}/regenerate-token`, { method: 'POST' });
+        await api(`/api/admin/tables/${tbl.id}/regenerate-token`, { method: 'POST' });
         toast('QR regenerated', 'success');
         await refresh();
       } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
@@ -167,27 +164,27 @@ function renderTable(t) {
   });
 
   const toggle = el('button', {
-    text: t.is_active ? 'Deactivate' : 'Reactivate',
-    className: t.is_active ? 'danger' : '',
+    text: t(tbl.is_active ? 'admin.deactivate' : 'admin.reactivate'),
+    className: tbl.is_active ? 'danger' : '',
     onclick: async () => {
-      if (t.is_active && !confirm(`Deactivate ${t.table_number}?`)) return;
+      if (tbl.is_active && !confirm(`Deactivate ${tbl.table_number}?`)) return;
       try {
-        await api(`/api/admin/tables/${t.id}`, {
+        await api(`/api/admin/tables/${tbl.id}`, {
           method: 'PUT',
-          body: JSON.stringify({ is_active: t.is_active ? 0 : 1 }),
+          body: JSON.stringify({ is_active: tbl.is_active ? 0 : 1 }),
         });
-        toast(t.is_active ? 'Table deactivated' : 'Table reactivated', 'success');
+        toast(tbl.is_active ? 'Table deactivated' : 'Table reactivated', 'success');
         await refresh();
       } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
     },
   });
 
   const clear = el('button', {
-    text: 'Clear session',
+    text: t('admin.clear_session'),
     onclick: async () => {
-      if (!confirm(`Clear session for ${t.table_number}? Customer will no longer see previous orders.`)) return;
+      if (!confirm(`Clear session for ${tbl.table_number}?`)) return;
       try {
-        const res = await api(`/api/admin/tables/${t.id}/clear-session`, { method: 'POST' });
+        const res = await api(`/api/admin/tables/${tbl.id}/clear-session`, { method: 'POST' });
         if (res.in_progress_count > 0) {
           toast(`Cleared ${res.cleared}. Warning: ${res.in_progress_count} still in kitchen.`, 'warn');
         } else {
@@ -206,11 +203,7 @@ $('add-table').onclick = async () => {
   const label = $('new-table-label').value.trim();
   $('add-error').textContent = '';
 
-  if (!table_number) {
-    $('add-error').textContent = 'Table number is required.';
-    return;
-  }
-
+  if (!table_number) { $('add-error').textContent = 'Table number is required.'; return; }
   try {
     await api('/api/admin/tables', {
       method: 'POST',
@@ -245,15 +238,12 @@ function renderCategory(c) {
   const order = el('input', { type: 'number', value: c.sort_order, style: 'max-width: 6rem;' });
 
   const save = el('button', {
-    text: 'Save',
+    text: t('admin.save'),
     onclick: async () => {
       try {
         await api(`/api/admin/categories/${c.id}`, {
           method: 'PUT',
-          body: JSON.stringify({
-            name: name.value.trim(),
-            sort_order: Number(order.value) || 0,
-          }),
+          body: JSON.stringify({ name: name.value.trim(), sort_order: Number(order.value) || 0 }),
         });
         toast('Category saved', 'success');
         await Promise.all([refreshCategories(), refreshMenuItems()]);
@@ -262,10 +252,10 @@ function renderCategory(c) {
   });
 
   const del = el('button', {
-    text: 'Delete',
+    text: t('admin.delete'),
     className: 'danger',
     onclick: async () => {
-      if (!confirm(`Delete "${c.name}"? Items in it will become uncategorized.`)) return;
+      if (!confirm(`Delete "${c.name}"?`)) return;
       try {
         await api(`/api/admin/categories/${c.id}`, { method: 'DELETE' });
         toast('Category deleted', 'success');
@@ -285,11 +275,7 @@ $('add-category').onclick = async () => {
   const sort_order = Number($('new-category-order').value) || 0;
   $('add-category-error').textContent = '';
 
-  if (!name) {
-    $('add-category-error').textContent = 'Name is required.';
-    return;
-  }
-
+  if (!name) { $('add-category-error').textContent = 'Name is required.'; return; }
   try {
     await api('/api/admin/categories', {
       method: 'POST',
@@ -315,9 +301,7 @@ async function refreshMenuItems() {
   const newSelect = $('new-item-category');
   if (newSelect) {
     newSelect.replaceChildren(el('option', { value: '', text: 'Uncategorized' }));
-    for (const c of cats) {
-      newSelect.appendChild(el('option', { value: String(c.id), text: c.name }));
-    }
+    for (const c of cats) newSelect.appendChild(el('option', { value: String(c.id), text: c.name }));
   }
 
   const root = $('menu-items');
@@ -339,11 +323,7 @@ function renderMenuItem(item, cats) {
     onerror: (e) => { e.target.src = '/admin/placeholder.svg'; },
   });
 
-  const upload = el('input', {
-    type: 'file',
-    accept: 'image/png,image/jpeg,image/webp',
-    style: 'display:none;',
-  });
+  const upload = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', style: 'display:none;' });
   upload.onchange = async () => {
     const f = upload.files[0];
     if (!f) return;
@@ -355,10 +335,7 @@ function renderMenuItem(item, cats) {
         if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
         return r.json();
       });
-      await api(`/api/admin/menu-items/${item.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ image_path: up.path }),
-      });
+      await api(`/api/admin/menu-items/${item.id}`, { method: 'PUT', body: JSON.stringify({ image_path: up.path }) });
       toast('Image updated', 'success');
       await refreshMenuItems();
     } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
@@ -370,12 +347,10 @@ function renderMenuItem(item, cats) {
 
   const cat = el('select', {});
   cat.appendChild(el('option', { value: '', text: 'Uncategorized' }));
-  for (const c of cats) {
-    cat.appendChild(el('option', { value: String(c.id), text: c.name, selected: c.id === item.category_id }));
-  }
+  for (const c of cats) cat.appendChild(el('option', { value: String(c.id), text: c.name, selected: c.id === item.category_id }));
 
   const save = el('button', {
-    text: 'Save',
+    text: t('admin.save'),
     onclick: async () => {
       try {
         await api(`/api/admin/menu-items/${item.id}`, {
@@ -393,7 +368,7 @@ function renderMenuItem(item, cats) {
   });
 
   const avail = el('button', {
-    text: item.is_available ? 'Mark unavailable' : 'Mark available',
+    text: t(item.is_available ? 'admin.mark_unavailable' : 'admin.mark_available'),
     onclick: async () => {
       try {
         await api(`/api/admin/menu-items/${item.id}`, {
@@ -407,10 +382,10 @@ function renderMenuItem(item, cats) {
   });
 
   const del = el('button', {
-    text: 'Delete',
+    text: t('admin.delete'),
     className: 'danger',
     onclick: async () => {
-      if (!confirm(`Delete "${item.name}"? Order history will keep the price.`)) return;
+      if (!confirm(`Delete "${item.name}"?`)) return;
       try {
         await api(`/api/admin/menu-items/${item.id}`, { method: 'DELETE' });
         toast('Item deleted', 'success');
@@ -427,9 +402,7 @@ function renderMenuItem(item, cats) {
     }),
   ]);
 
-  const actions = el('div', { className: 'actions' }, [uploadBtn, save, avail, del]);
-
-  return el('div', { className: 'row' }, [img, info, actions, upload]);
+  return el('div', { className: 'row' }, [img, info, el('div', { className: 'actions' }, [uploadBtn, save, avail, del]), upload]);
 }
 
 $('add-item').onclick = async () => {
@@ -458,14 +431,9 @@ $('add-item').onclick = async () => {
       });
       image_path = up.path;
     }
-
     await api('/api/admin/menu-items', {
       method: 'POST',
-      body: JSON.stringify({
-        name, price,
-        category_id: catVal === '' ? null : Number(catVal),
-        image_path,
-      }),
+      body: JSON.stringify({ name, price, category_id: catVal === '' ? null : Number(catVal), image_path }),
     });
     toast(`Item "${name}" added`, 'success');
     $('new-item-name').value = '';
@@ -497,9 +465,7 @@ async function refreshDashboard() {
     } else {
       for (const it of d.top_items) {
         root.appendChild(el('div', { className: 'row' }, [
-          el('div', { className: 'info' }, [
-            el('div', { className: 'num', text: it.name }),
-          ]),
+          el('div', { className: 'info' }, [el('div', { className: 'num', text: it.name })]),
           el('div', { text: `${it.qty}× — ${it.revenue.toFixed(2)}` }),
         ]));
       }
@@ -510,6 +476,22 @@ async function refreshDashboard() {
 }
 
 // ---------- Live orders ----------
+
+function updateLiveBadge(count) {
+  const badge = $('live-badge');
+  if (!badge) return;
+  if (count > 0) { badge.textContent = String(count); badge.style.display = 'inline-block'; }
+  else { badge.style.display = 'none'; }
+}
+
+async function refreshLiveBadgeOnly() {
+  try {
+    const res = await fetch('/api/kitchen/orders');
+    if (!res.ok) return;
+    const orders = await res.json();
+    updateLiveBadge(orders.length);
+  } catch {}
+}
 
 async function refreshLive() {
   const root = $('live-list');
@@ -529,7 +511,6 @@ async function refreshLive() {
       root.appendChild(el('p', { className: 'muted', text: 'No active orders.' }));
       return;
     }
-
     if (!selectedLiveOrderId || !orders.find((o) => o.id === selectedLiveOrderId)) {
       selectedLiveOrderId = orders[0].id;
     }
@@ -547,29 +528,25 @@ async function refreshLive() {
       ]);
 
       const actions = el('div', { className: 'actions' });
-
       if (o.status === 'placed') {
         actions.appendChild(el('button', {
-          className: 'primary', text: 'Confirm (C)',
+          className: 'primary', text: `${t('admin.confirm')} (C)`,
           onclick: (e) => { e.stopPropagation(); confirmOrder(o.id); },
         }));
       }
       if (o.status === 'preparing' || o.status === 'ready') {
         actions.appendChild(el('button', {
-          className: 'primary', text: 'Mark served (S)',
+          className: 'primary', text: `${t('admin.serve')} (S)`,
           onclick: (e) => { e.stopPropagation(); serveOrder(o.id); },
         }));
       }
       actions.appendChild(el('button', {
-        text: 'Reject (X)', className: 'danger',
+        text: `${t('admin.reject')} (X)`, className: 'danger',
         onclick: (e) => { e.stopPropagation(); rejectOrder(o.id); },
       }));
 
       const row = el('div', { className: `row${o.id === selectedLiveOrderId ? ' selected' : ''}` }, [info, actions]);
-      row.onclick = () => {
-        selectedLiveOrderId = o.id;
-        refreshLive();
-      };
+      row.onclick = () => { selectedLiveOrderId = o.id; refreshLive(); };
       root.appendChild(row);
     }
   } catch (e) {
@@ -579,33 +556,10 @@ async function refreshLive() {
   }
 }
 
-function updateLiveBadge(count) {
-  const badge = $('live-badge');
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent = String(count);
-    badge.style.display = 'inline-block';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-async function refreshLiveBadgeOnly() {
-  try {
-    const res = await fetch('/api/kitchen/orders');
-    if (!res.ok) return;
-    const orders = await res.json();
-    updateLiveBadge(orders.length);
-  } catch {}
-}
-
 async function confirmOrder(id) {
   const o = liveOrdersCache.find((x) => x.id === id);
   if (!o) return;
-  if (o.status !== 'placed') {
-    toast(`Order #${id} is already ${o.status}`, 'warn');
-    return;
-  }
+  if (o.status !== 'placed') { toast(`Order #${id} is already ${o.status}`, 'warn'); return; }
   try {
     await api(`/api/kitchen/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'preparing' }) });
     toast(`Order #${id} confirmed`, 'success');
@@ -617,10 +571,7 @@ async function confirmOrder(id) {
 async function serveOrder(id) {
   const o = liveOrdersCache.find((x) => x.id === id);
   if (!o) return;
-  if (o.status !== 'preparing' && o.status !== 'ready') {
-    toast(`Order #${id} cannot be served (${o.status})`, 'warn');
-    return;
-  }
+  if (o.status !== 'preparing' && o.status !== 'ready') { toast(`Order #${id} cannot be served (${o.status})`, 'warn'); return; }
   try {
     await api(`/api/kitchen/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'served' }) });
     toast(`Order #${id} served`, 'success');
@@ -654,6 +605,7 @@ function moveLiveSelection(delta) {
 async function loadHistory(from, to) {
   const msg = $('hist-summary');
   const root = $('hist-list');
+  if (!msg || !root) return;
   msg.textContent = 'loading…';
   root.replaceChildren();
 
@@ -665,12 +617,10 @@ async function loadHistory(from, to) {
   try {
     const data = await api(`/api/admin/orders?${params.toString()}`);
     msg.textContent = `${data.total_count} order(s) — total ${data.total_sum.toFixed(2)}`;
-
     if (data.orders.length === 0) {
       root.appendChild(el('p', { className: 'muted', text: 'No orders in this range.' }));
       return;
     }
-
     for (const o of data.orders) {
       const items = el('div', { className: 'muted' },
         o.items.map((it) => el('div', { text: `${it.qty}× ${it.name_snapshot} — ${(it.price_snapshot * it.qty).toFixed(2)}` }))
@@ -696,38 +646,16 @@ async function loadHistory(from, to) {
 function wireHistory() {
   const todayBtn = $('hist-today');
   if (!todayBtn) return;
-
   const today = new Date();
   const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
   const monthAgo = new Date(today); monthAgo.setDate(today.getDate() - 30);
+  const setDates = (from, to) => { $('hist-from').value = from || ''; $('hist-to').value = to || ''; };
 
-  const setDates = (from, to) => {
-    $('hist-from').value = from || '';
-    $('hist-to').value = to || '';
-  };
-
-  todayBtn.onclick = () => {
-    const t = ymd(today);
-    setDates(t, t);
-    loadHistory(t, t);
-  };
-  $('hist-week').onclick = () => {
-    const from = ymd(weekAgo), to = ymd(today);
-    setDates(from, to);
-    loadHistory(from, to);
-  };
-  $('hist-month').onclick = () => {
-    const from = ymd(monthAgo), to = ymd(today);
-    setDates(from, to);
-    loadHistory(from, to);
-  };
-  $('hist-all').onclick = () => {
-    setDates('', '');
-    loadHistory('', '');
-  };
-  $('hist-apply').onclick = () => {
-    loadHistory($('hist-from').value, $('hist-to').value);
-  };
+  todayBtn.onclick = () => { const s = ymd(today); setDates(s, s); loadHistory(s, s); };
+  $('hist-week').onclick = () => { const f = ymd(weekAgo), t2 = ymd(today); setDates(f, t2); loadHistory(f, t2); };
+  $('hist-month').onclick = () => { const f = ymd(monthAgo), t2 = ymd(today); setDates(f, t2); loadHistory(f, t2); };
+  $('hist-all').onclick = () => { setDates('', ''); loadHistory('', ''); };
+  $('hist-apply').onclick = () => loadHistory($('hist-from').value, $('hist-to').value);
 }
 
 // ---------- Settings ----------
@@ -749,18 +677,13 @@ async function saveSettings() {
   const msg = $('settings-message');
   msg.textContent = '';
   msg.style.color = '#888';
-
   const payload = {
     restaurant_name: $('setting-restaurant-name').value.trim(),
     currency: $('setting-currency').value.trim(),
     default_language: $('setting-default-language').value.trim(),
   };
-
   try {
-    await api('/api/admin/settings', {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+    await api('/api/admin/settings', { method: 'PUT', body: JSON.stringify(payload) });
     msg.textContent = 'Settings saved.';
     msg.style.color = '#155724';
     toast('Settings saved', 'success');
@@ -778,18 +701,12 @@ async function saveSettings() {
 
 async function changePin(target) {
   const current_pin = $('current-pin').value.trim();
-  const new_pin = target === 'admin'
-    ? $('new-admin-pin').value.trim()
-    : $('new-kitchen-pin').value.trim();
+  const new_pin = target === 'admin' ? $('new-admin-pin').value.trim() : $('new-kitchen-pin').value.trim();
   const msg = $('security-message');
   msg.textContent = '';
   msg.style.color = '#888';
-
   try {
-    await api('/api/admin/auth/change-pin', {
-      method: 'POST',
-      body: JSON.stringify({ current_pin, target, new_pin }),
-    });
+    await api('/api/admin/auth/change-pin', { method: 'POST', body: JSON.stringify({ current_pin, target, new_pin }) });
     $('current-pin').value = '';
     $('new-admin-pin').value = '';
     $('new-kitchen-pin').value = '';
@@ -808,17 +725,11 @@ async function changePin(target) {
 
 function showTab(name) {
   if (!PAGE_TITLES[name]) name = 'dashboard';
-  document.querySelectorAll('.tab').forEach((t) => {
-    t.classList.toggle('active', t.dataset.tab === name);
-  });
-  document.querySelectorAll('.panel').forEach((p) => {
-    p.classList.toggle('active', p.dataset.panel === name);
-  });
+  document.querySelectorAll('.tab').forEach((tb) => tb.classList.toggle('active', tb.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
   const title = $('page-title');
-  if (title) title.textContent = PAGE_TITLES[name];
-  if (window.location.hash !== '#' + name) {
-    history.replaceState(null, '', '#' + name);
-  }
+  if (title) title.textContent = t(PAGE_TITLES[name]);
+  if (window.location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
   const sb = $('sidebar');
   if (sb) sb.classList.remove('open');
 
@@ -844,14 +755,11 @@ function refreshActiveTab() {
 
 function openHelp() {
   const url = `${window.location.origin}/kitchen/`;
-  const hel = $('help-kitchen-url');
-  if (hel) hel.textContent = url;
+  const h = $('help-kitchen-url');
+  if (h) h.textContent = url;
   $('help-modal')?.classList.add('open');
 }
-
-function closeHelp() {
-  $('help-modal')?.classList.remove('open');
-}
+function closeHelp() { $('help-modal')?.classList.remove('open'); }
 
 // ---------- Keyboard shortcuts ----------
 
@@ -862,67 +770,45 @@ document.addEventListener('keydown', (e) => {
     if (isTyping(document.activeElement)) document.activeElement.blur();
     return;
   }
-
   if (isTyping(e.target)) return;
   if (!isLoggedIn) return;
 
   const activeTab = document.querySelector('.tab.active')?.dataset.tab;
 
   if (activeTab === 'live') {
-    if (e.key === 'ArrowDown' || e.key === 'j' || e.key === 'J') {
-      e.preventDefault();
-      moveLiveSelection(1);
-      return;
-    }
-    if (e.key === 'ArrowUp' || e.key === 'k' || e.key === 'K') {
-      e.preventDefault();
-      moveLiveSelection(-1);
-      return;
-    }
+    if (e.key === 'ArrowDown' || e.key === 'j' || e.key === 'J') { e.preventDefault(); moveLiveSelection(1); return; }
+    if (e.key === 'ArrowUp' || e.key === 'k' || e.key === 'K') { e.preventDefault(); moveLiveSelection(-1); return; }
     if (e.key === 'c' || e.key === 'C' || e.key === 'Enter') {
       e.preventDefault();
-      if (selectedLiveOrderId) confirmOrder(selectedLiveOrderId);
-      else toast('No order selected', 'warn');
+      if (selectedLiveOrderId) confirmOrder(selectedLiveOrderId); else toast('No order selected', 'warn');
       return;
     }
     if (e.key === 's' || e.key === 'S') {
       e.preventDefault();
-      if (selectedLiveOrderId) serveOrder(selectedLiveOrderId);
-      else toast('No order selected', 'warn');
+      if (selectedLiveOrderId) serveOrder(selectedLiveOrderId); else toast('No order selected', 'warn');
       return;
     }
     if (e.key === 'x' || e.key === 'X') {
       e.preventDefault();
-      if (selectedLiveOrderId) rejectOrder(selectedLiveOrderId);
-      else toast('No order selected', 'warn');
+      if (selectedLiveOrderId) rejectOrder(selectedLiveOrderId); else toast('No order selected', 'warn');
       return;
     }
   }
 
-  if (e.key === '?' || (e.shiftKey && e.key === '/')) {
-    e.preventDefault();
-    openHelp();
-    return;
-  }
+  if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); openHelp(); return; }
   const n = parseInt(e.key, 10);
-  if (n >= 1 && n <= TAB_ORDER.length) {
-    showTab(TAB_ORDER[n - 1]);
-    return;
-  }
-  if (e.key === 'r' || e.key === 'R') {
-    e.preventDefault();
-    refreshActiveTab();
-  }
+  if (n >= 1 && n <= TAB_ORDER.length) { showTab(TAB_ORDER[n - 1]); return; }
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); refreshActiveTab(); }
 });
 
 // ---------- Boot ----------
 
 function wireTabs() {
-  document.querySelectorAll('.tab').forEach((t) => {
-    t.onclick = () => showTab(t.dataset.tab);
+  document.querySelectorAll('.tab').forEach((tb) => {
+    tb.onclick = () => showTab(tb.dataset.tab);
   });
-  const initialTab = (window.location.hash || '#dashboard').slice(1);
-  showTab(PAGE_TITLES[initialTab] ? initialTab : 'dashboard');
+  const initial = (window.location.hash || '#dashboard').slice(1);
+  showTab(PAGE_TITLES[initial] ? initial : 'dashboard');
 }
 
 function wireButtons() {
@@ -937,9 +823,7 @@ function wireButtons() {
   if (btnHelp) btnHelp.onclick = openHelp;
   const btnHelpClose = $('help-close');
   if (btnHelpClose) btnHelpClose.onclick = closeHelp;
-  $('help-modal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'help-modal') closeHelp();
-  });
+  $('help-modal')?.addEventListener('click', (e) => { if (e.target.id === 'help-modal') closeHelp(); });
 
   const btnAdminPin = $('change-admin-pin');
   if (btnAdminPin) btnAdminPin.onclick = () => changePin('admin');
@@ -947,11 +831,9 @@ function wireButtons() {
   if (btnKitchenPin) btnKitchenPin.onclick = () => changePin('kitchen');
   const btnSaveSettings = $('save-settings');
   if (btnSaveSettings) btnSaveSettings.onclick = saveSettings;
-
   const dashBtn = $('dash-refresh');
   if (dashBtn) dashBtn.onclick = () => refreshDashboard();
 
-  // Kitchen URL display
   const kUrl = `${window.location.origin}/kitchen/`;
   const kUrlEl = $('kitchen-url');
   if (kUrlEl) kUrlEl.textContent = kUrl;
@@ -960,12 +842,8 @@ function wireButtons() {
   const kCopy = $('copy-kitchen-url');
   if (kCopy) {
     kCopy.onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(kUrl);
-        toast('Kitchen URL copied', 'success');
-      } catch {
-        toast('Copy failed — select and copy manually', 'error');
-      }
+      try { await navigator.clipboard.writeText(kUrl); toast('Kitchen URL copied', 'success'); }
+      catch { toast('Copy failed', 'error'); }
     };
   }
 }
@@ -980,10 +858,10 @@ async function loadApp() {
       refreshDashboard(),
     ]);
     wireHistory();
-    const t = ymd(new Date());
-    $('hist-from').value = t;
-    $('hist-to').value = t;
-    loadHistory(t, t);
+    const today = ymd(new Date());
+    $('hist-from').value = today;
+    $('hist-to').value = today;
+    loadHistory(today, today);
     refreshLiveBadgeOnly();
   } catch (e) {
     if (e.message !== 'unauthorized') {
@@ -994,6 +872,26 @@ async function loadApp() {
 }
 
 async function boot() {
+  await initI18n();
+  applyTranslations();
+
+  const langSel = $('lang-select-admin');
+  if (langSel) {
+    langSel.value = getLang();
+    langSel.addEventListener('change', async (e) => {
+      await setLang(e.target.value);
+      await Promise.allSettled([
+        refresh(),
+        refreshCategories(),
+        refreshMenuItems(),
+        refreshLive(),
+      ]);
+      const active = document.querySelector('.tab.active')?.dataset.tab || 'dashboard';
+      const title = $('page-title');
+      if (title) title.textContent = t(PAGE_TITLES[active]);
+    });
+  }
+
   wireTabs();
   wireButtons();
 
@@ -1005,10 +903,7 @@ async function boot() {
     showLogin();
   }
 
-  // Global badge poll
   setInterval(refreshLiveBadgeOnly, 8000);
-
-  // Auto-refresh active tab
   setInterval(() => {
     const active = document.querySelector('.tab.active');
     if (!active) return;
