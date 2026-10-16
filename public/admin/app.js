@@ -1,20 +1,18 @@
 const $ = (id) => document.getElementById(id);
 
-// ---------- Toast ----------
+const TAB_ORDER = ['dashboard', 'tables', 'menu', 'live', 'orders', 'settings'];
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  tables: 'Tables',
+  menu: 'Menu',
+  live: 'Live orders',
+  orders: 'Order history',
+  settings: 'Settings',
+};
 
-function toast(message, kind = 'info') {
-  const container = $('toast-container');
-  if (!container) return;
-  const el = document.createElement('div');
-  el.className = `toast toast-${kind}`;
-  el.textContent = message;
-  container.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('toast-show'));
-  setTimeout(() => {
-    el.classList.remove('toast-show');
-    setTimeout(() => el.remove(), 250);
-  }, 2800);
-}
+let isLoggedIn = false;
+let selectedLiveOrderId = null;
+let liveOrdersCache = [];
 
 // ---------- Helpers ----------
 
@@ -52,9 +50,35 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+function toast(message, kind = 'info') {
+  const container = $('toast-container');
+  if (!container) { console.log('[toast]', message); return; }
+  const t = document.createElement('div');
+  t.className = `toast toast-${kind}`;
+  t.textContent = message;
+  container.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('toast-show'));
+  setTimeout(() => {
+    t.classList.remove('toast-show');
+    setTimeout(() => t.remove(), 250);
+  }, 2800);
+}
+
+function isTyping(el) {
+  if (!el) return false;
+  const t = el.tagName;
+  return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || el.isContentEditable;
+}
+
+function ymd(date) {
+  return date.toLocaleDateString('en-CA');
+}
+
 // ---------- Auth ----------
 
 function showLogin() {
+  isLoggedIn = false;
+  $('splash')?.classList.add('hide');
   $('login-view').style.display = 'block';
   $('app-view').style.display = 'none';
   $('pin-error').textContent = '';
@@ -63,6 +87,8 @@ function showLogin() {
 }
 
 function showApp() {
+  isLoggedIn = true;
+  $('splash')?.classList.add('hide');
   $('login-view').style.display = 'none';
   $('app-view').style.display = 'grid';
 }
@@ -98,13 +124,13 @@ async function logout() {
 async function refresh() {
   const tables = await api('/api/admin/tables');
   const root = $('tables');
+  if (!root) return;
   root.replaceChildren();
 
   if (tables.length === 0) {
     root.appendChild(el('p', { className: 'muted', text: 'No tables yet. Add one above.' }));
     return;
   }
-
   for (const t of tables) root.appendChild(renderTable(t));
 }
 
@@ -163,7 +189,7 @@ function renderTable(t) {
       try {
         const res = await api(`/api/admin/tables/${t.id}/clear-session`, { method: 'POST' });
         if (res.in_progress_count > 0) {
-          toast(`Cleared ${res.cleared}. Warning: ${res.in_progress_count} order(s) still in kitchen.`, 'warn');
+          toast(`Cleared ${res.cleared}. Warning: ${res.in_progress_count} still in kitchen.`, 'warn');
         } else {
           toast(`Cleared ${res.cleared} order(s)`, 'success');
         }
@@ -204,13 +230,13 @@ $('add-table').onclick = async () => {
 async function refreshCategories() {
   const cats = await api('/api/admin/categories');
   const root = $('categories');
+  if (!root) return;
   root.replaceChildren();
 
   if (cats.length === 0) {
     root.appendChild(el('p', { className: 'muted', text: 'No categories yet.' }));
     return;
   }
-
   for (const c of cats) root.appendChild(renderCategory(c));
 }
 
@@ -302,7 +328,6 @@ async function refreshMenuItems() {
     root.appendChild(el('p', { className: 'muted', text: 'No menu items yet.' }));
     return;
   }
-
   for (const item of items) root.appendChild(renderMenuItem(item, cats));
 }
 
@@ -462,6 +487,9 @@ async function refreshDashboard() {
     $('dash-sales').textContent = d.sales_completed.toFixed(2);
     $('dash-avg').textContent = d.avg_order_value.toFixed(2);
 
+    const updated = $('dash-updated');
+    if (updated) updated.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
     const root = $('dash-top');
     root.replaceChildren();
     if (d.top_items.length === 0) {
@@ -492,11 +520,18 @@ async function refreshLive() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const orders = await res.json();
 
+    liveOrdersCache = orders;
+    updateLiveBadge(orders.length);
     root.replaceChildren();
 
     if (orders.length === 0) {
+      selectedLiveOrderId = null;
       root.appendChild(el('p', { className: 'muted', text: 'No active orders.' }));
       return;
+    }
+
+    if (!selectedLiveOrderId || !orders.find((o) => o.id === selectedLiveOrderId)) {
+      selectedLiveOrderId = orders[0].id;
     }
 
     for (const o of orders) {
@@ -515,42 +550,27 @@ async function refreshLive() {
 
       if (o.status === 'placed') {
         actions.appendChild(el('button', {
-          className: 'primary', text: 'Confirm',
-          onclick: async () => {
-            try {
-              await api(`/api/kitchen/orders/${o.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'preparing' }) });
-              toast(`Order #${o.id} confirmed`, 'success');
-              refreshLive();
-            } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
-          },
+          className: 'primary', text: 'Confirm (C)',
+          onclick: (e) => { e.stopPropagation(); confirmOrder(o.id); },
         }));
       }
       if (o.status === 'preparing' || o.status === 'ready') {
         actions.appendChild(el('button', {
-          className: 'primary', text: 'Mark served',
-          onclick: async () => {
-            try {
-              await api(`/api/kitchen/orders/${o.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'served' }) });
-              toast(`Order #${o.id} served`, 'success');
-              refreshLive();
-            } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
-          },
+          className: 'primary', text: 'Mark served (S)',
+          onclick: (e) => { e.stopPropagation(); serveOrder(o.id); },
         }));
       }
-
       actions.appendChild(el('button', {
-        text: 'Reject', className: 'danger',
-        onclick: async () => {
-          if (!confirm(`Reject order #${o.id}?`)) return;
-          try {
-            await api(`/api/kitchen/orders/${o.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
-            toast(`Order #${o.id} rejected`, 'warn');
-            refreshLive();
-          } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
-        },
+        text: 'Reject (X)', className: 'danger',
+        onclick: (e) => { e.stopPropagation(); rejectOrder(o.id); },
       }));
 
-      root.appendChild(el('div', { className: 'row' }, [info, actions]));
+      const row = el('div', { className: `row${o.id === selectedLiveOrderId ? ' selected' : ''}` }, [info, actions]);
+      row.onclick = () => {
+        selectedLiveOrderId = o.id;
+        refreshLive();
+      };
+      root.appendChild(row);
     }
   } catch (e) {
     if (e.message !== 'unauthorized') {
@@ -559,11 +579,77 @@ async function refreshLive() {
   }
 }
 
-// ---------- Order history ----------
-
-function ymd(date) {
-  return date.toLocaleDateString('en-CA');
+function updateLiveBadge(count) {
+  const badge = $('live-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = String(count);
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
 }
+
+async function refreshLiveBadgeOnly() {
+  try {
+    const res = await fetch('/api/kitchen/orders');
+    if (!res.ok) return;
+    const orders = await res.json();
+    updateLiveBadge(orders.length);
+  } catch {}
+}
+
+async function confirmOrder(id) {
+  const o = liveOrdersCache.find((x) => x.id === id);
+  if (!o) return;
+  if (o.status !== 'placed') {
+    toast(`Order #${id} is already ${o.status}`, 'warn');
+    return;
+  }
+  try {
+    await api(`/api/kitchen/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'preparing' }) });
+    toast(`Order #${id} confirmed`, 'success');
+    await refreshLive();
+    refreshDashboard();
+  } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+}
+
+async function serveOrder(id) {
+  const o = liveOrdersCache.find((x) => x.id === id);
+  if (!o) return;
+  if (o.status !== 'preparing' && o.status !== 'ready') {
+    toast(`Order #${id} cannot be served (${o.status})`, 'warn');
+    return;
+  }
+  try {
+    await api(`/api/kitchen/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'served' }) });
+    toast(`Order #${id} served`, 'success');
+    await refreshLive();
+    refreshDashboard();
+  } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+}
+
+async function rejectOrder(id) {
+  const o = liveOrdersCache.find((x) => x.id === id);
+  if (!o) return;
+  if (!confirm(`Reject order #${id}?`)) return;
+  try {
+    await api(`/api/kitchen/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
+    toast(`Order #${id} rejected`, 'warn');
+    await refreshLive();
+    refreshDashboard();
+  } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+}
+
+function moveLiveSelection(delta) {
+  if (liveOrdersCache.length === 0) return;
+  const idx = liveOrdersCache.findIndex((o) => o.id === selectedLiveOrderId);
+  const next = (idx + delta + liveOrdersCache.length) % liveOrdersCache.length;
+  selectedLiveOrderId = liveOrdersCache[next].id;
+  refreshLive();
+}
+
+// ---------- Order history ----------
 
 async function loadHistory(from, to) {
   const msg = $('hist-summary');
@@ -642,11 +728,6 @@ function wireHistory() {
   $('hist-apply').onclick = () => {
     loadHistory($('hist-from').value, $('hist-to').value);
   };
-
-  // Default: load today on first view
-  const t = ymd(today);
-  setDates(t, t);
-  loadHistory(t, t);
 }
 
 // ---------- Settings ----------
@@ -725,16 +806,8 @@ async function changePin(target) {
 
 // ---------- Tabs ----------
 
-const PAGE_TITLES = {
-  dashboard: 'Dashboard',
-  tables: 'Tables',
-  menu: 'Menu',
-  live: 'Live orders',
-  orders: 'Orders',
-  settings: 'Settings',
-};
-
 function showTab(name) {
+  if (!PAGE_TITLES[name]) name = 'dashboard';
   document.querySelectorAll('.tab').forEach((t) => {
     t.classList.toggle('active', t.dataset.tab === name);
   });
@@ -742,14 +815,105 @@ function showTab(name) {
     p.classList.toggle('active', p.dataset.panel === name);
   });
   const title = $('page-title');
-  if (title) title.textContent = PAGE_TITLES[name] || name;
+  if (title) title.textContent = PAGE_TITLES[name];
   if (window.location.hash !== '#' + name) {
     history.replaceState(null, '', '#' + name);
   }
   const sb = $('sidebar');
   if (sb) sb.classList.remove('open');
+
   if (name === 'live') refreshLive();
+  else if (name === 'dashboard') refreshDashboard();
+  else if (name === 'tables') refresh();
+  else if (name === 'menu') { refreshCategories(); refreshMenuItems(); }
+  else if (name === 'settings') refreshSettings();
 }
+
+function refreshActiveTab() {
+  const active = document.querySelector('.tab.active')?.dataset.tab;
+  if (!active) return;
+  if (active === 'dashboard') refreshDashboard();
+  else if (active === 'tables') refresh();
+  else if (active === 'menu') { refreshCategories(); refreshMenuItems(); }
+  else if (active === 'live') refreshLive();
+  else if (active === 'settings') refreshSettings();
+  toast('Refreshed', 'info');
+}
+
+// ---------- Help modal ----------
+
+function openHelp() {
+  const url = `${window.location.origin}/kitchen/`;
+  const hel = $('help-kitchen-url');
+  if (hel) hel.textContent = url;
+  $('help-modal')?.classList.add('open');
+}
+
+function closeHelp() {
+  $('help-modal')?.classList.remove('open');
+}
+
+// ---------- Keyboard shortcuts ----------
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeHelp();
+    $('sidebar')?.classList.remove('open');
+    if (isTyping(document.activeElement)) document.activeElement.blur();
+    return;
+  }
+
+  if (isTyping(e.target)) return;
+  if (!isLoggedIn) return;
+
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+
+  if (activeTab === 'live') {
+    if (e.key === 'ArrowDown' || e.key === 'j' || e.key === 'J') {
+      e.preventDefault();
+      moveLiveSelection(1);
+      return;
+    }
+    if (e.key === 'ArrowUp' || e.key === 'k' || e.key === 'K') {
+      e.preventDefault();
+      moveLiveSelection(-1);
+      return;
+    }
+    if (e.key === 'c' || e.key === 'C' || e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedLiveOrderId) confirmOrder(selectedLiveOrderId);
+      else toast('No order selected', 'warn');
+      return;
+    }
+    if (e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      if (selectedLiveOrderId) serveOrder(selectedLiveOrderId);
+      else toast('No order selected', 'warn');
+      return;
+    }
+    if (e.key === 'x' || e.key === 'X') {
+      e.preventDefault();
+      if (selectedLiveOrderId) rejectOrder(selectedLiveOrderId);
+      else toast('No order selected', 'warn');
+      return;
+    }
+  }
+
+  if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+    e.preventDefault();
+    openHelp();
+    return;
+  }
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= TAB_ORDER.length) {
+    showTab(TAB_ORDER[n - 1]);
+    return;
+  }
+  if (e.key === 'r' || e.key === 'R') {
+    e.preventDefault();
+    refreshActiveTab();
+  }
+});
 
 // ---------- Boot ----------
 
@@ -758,7 +922,7 @@ function wireTabs() {
     t.onclick = () => showTab(t.dataset.tab);
   });
   const initialTab = (window.location.hash || '#dashboard').slice(1);
-  showTab(initialTab);
+  showTab(PAGE_TITLES[initialTab] ? initialTab : 'dashboard');
 }
 
 function wireButtons() {
@@ -767,12 +931,15 @@ function wireButtons() {
   $('logout-btn').onclick = logout;
 
   const btnMenu = $('menu-toggle');
-  if (btnMenu) {
-    btnMenu.onclick = () => {
-      const sb = $('sidebar');
-      if (sb) sb.classList.toggle('open');
-    };
-  }
+  if (btnMenu) btnMenu.onclick = () => $('sidebar')?.classList.toggle('open');
+
+  const btnHelp = $('help-btn');
+  if (btnHelp) btnHelp.onclick = openHelp;
+  const btnHelpClose = $('help-close');
+  if (btnHelpClose) btnHelpClose.onclick = closeHelp;
+  $('help-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'help-modal') closeHelp();
+  });
 
   const btnAdminPin = $('change-admin-pin');
   if (btnAdminPin) btnAdminPin.onclick = () => changePin('admin');
@@ -780,6 +947,27 @@ function wireButtons() {
   if (btnKitchenPin) btnKitchenPin.onclick = () => changePin('kitchen');
   const btnSaveSettings = $('save-settings');
   if (btnSaveSettings) btnSaveSettings.onclick = saveSettings;
+
+  const dashBtn = $('dash-refresh');
+  if (dashBtn) dashBtn.onclick = () => refreshDashboard();
+
+  // Kitchen URL display
+  const kUrl = `${window.location.origin}/kitchen/`;
+  const kUrlEl = $('kitchen-url');
+  if (kUrlEl) kUrlEl.textContent = kUrl;
+  const kOpen = $('open-kitchen-url');
+  if (kOpen) kOpen.href = kUrl;
+  const kCopy = $('copy-kitchen-url');
+  if (kCopy) {
+    kCopy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(kUrl);
+        toast('Kitchen URL copied', 'success');
+      } catch {
+        toast('Copy failed — select and copy manually', 'error');
+      }
+    };
+  }
 }
 
 async function loadApp() {
@@ -792,6 +980,11 @@ async function loadApp() {
       refreshDashboard(),
     ]);
     wireHistory();
+    const t = ymd(new Date());
+    $('hist-from').value = t;
+    $('hist-to').value = t;
+    loadHistory(t, t);
+    refreshLiveBadgeOnly();
   } catch (e) {
     if (e.message !== 'unauthorized') {
       console.error('loadApp error', e);
@@ -812,10 +1005,17 @@ async function boot() {
     showLogin();
   }
 
+  // Global badge poll
+  setInterval(refreshLiveBadgeOnly, 8000);
+
+  // Auto-refresh active tab
   setInterval(() => {
     const active = document.querySelector('.tab.active');
-    if (active && active.dataset.tab === 'live') refreshLive();
-  }, 5000);
+    if (!active) return;
+    const tab = active.dataset.tab;
+    if (tab === 'live') refreshLive();
+    if (tab === 'dashboard') refreshDashboard();
+  }, 4000);
 }
 
 boot();

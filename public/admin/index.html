@@ -8,6 +8,11 @@
 </head>
 <body>
 
+  <div id="splash">
+    <div class="splash-spinner"></div>
+    <div class="splash-text">Loading admin…</div>
+  </div>
+
   <div id="toast-container"></div>
 
   <section id="login-view">
@@ -16,52 +21,48 @@
     <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" />
     <button id="pin-submit">Log in</button>
     <div id="pin-error" class="error"></div>
+    <p class="muted" style="margin-top: 2rem; font-size: 0.8rem;">Press <kbd>?</kbd> for shortcuts</p>
   </section>
 
   <section id="app-view">
     <header class="topbar">
-      <button class="menu-toggle" id="menu-toggle">☰</button>
+      <button class="menu-toggle" id="menu-toggle" title="Menu">☰</button>
       <div class="brand">
         <span id="brand-name">Restaurant</span>
         <span class="sub">Admin</span>
       </div>
       <div class="spacer"></div>
+      <button id="help-btn" class="icon-btn" title="Keyboard shortcuts (?)">?</button>
       <button id="logout-btn" class="logout-btn">Log out</button>
     </header>
 
     <aside class="sidebar" id="sidebar">
       <nav>
-        <button class="tab" data-tab="dashboard">Dashboard</button>
-        <button class="tab" data-tab="tables">Tables</button>
-        <button class="tab" data-tab="menu">Menu</button>
-        <button class="tab" data-tab="live">Live orders</button>
-        <button class="tab" data-tab="orders">Order history</button>
-        <button class="tab" data-tab="settings">Settings</button>
+        <button class="tab" data-tab="dashboard"><span class="tab-key">1</span> Dashboard</button>
+        <button class="tab" data-tab="tables"><span class="tab-key">2</span> Tables</button>
+        <button class="tab" data-tab="menu"><span class="tab-key">3</span> Menu</button>
+        <button class="tab" data-tab="live"><span class="tab-key">4</span> Live orders <span class="tab-badge" id="live-badge" style="display:none;">0</span></button>
+        <button class="tab" data-tab="orders"><span class="tab-key">5</span> Order history</button>
+        <button class="tab" data-tab="settings"><span class="tab-key">6</span> Settings</button>
       </nav>
+      <div class="sidebar-hint">
+        <kbd>1</kbd>–<kbd>6</kbd> tabs · <kbd>R</kbd> refresh · <kbd>?</kbd> help
+      </div>
     </aside>
 
     <main class="content">
       <h1 class="page-title" id="page-title">Dashboard</h1>
 
-      <!-- DASHBOARD -->
       <section class="panel" data-panel="dashboard">
+        <div class="toolbar">
+          <span class="muted" id="dash-updated">—</span>
+          <button id="dash-refresh">Refresh (R)</button>
+        </div>
         <div class="stats">
-          <div class="stat">
-            <div class="num" id="dash-completed">—</div>
-            <div class="lbl">Served</div>
-          </div>
-          <div class="stat warn">
-            <div class="num" id="dash-progress">—</div>
-            <div class="lbl">In progress</div>
-          </div>
-          <div class="stat success">
-            <div class="num" id="dash-sales">—</div>
-            <div class="lbl">Sales</div>
-          </div>
-          <div class="stat muted">
-            <div class="num" id="dash-avg">—</div>
-            <div class="lbl">Avg order</div>
-          </div>
+          <div class="stat"><div class="num" id="dash-completed">—</div><div class="lbl">Served</div></div>
+          <div class="stat warn"><div class="num" id="dash-progress">—</div><div class="lbl">In progress</div></div>
+          <div class="stat success"><div class="num" id="dash-sales">—</div><div class="lbl">Sales</div></div>
+          <div class="stat muted"><div class="num" id="dash-avg">—</div><div class="lbl">Avg order</div></div>
         </div>
         <div class="card">
           <h2>Top items today</h2>
@@ -69,7 +70,6 @@
         </div>
       </section>
 
-      <!-- TABLES -->
       <section class="panel" data-panel="tables">
         <div class="card">
           <h2>Add table</h2>
@@ -81,7 +81,7 @@
           <p id="add-error" class="error"></p>
         </div>
         <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+          <div class="card-head-row">
             <h2 style="margin:0;">Tables</h2>
             <a href="/admin/print.html" target="_blank" class="link-button">Print all QR codes →</a>
           </div>
@@ -89,7 +89,6 @@
         </div>
       </section>
 
-      <!-- MENU -->
       <section class="panel" data-panel="menu">
         <div class="card">
           <h2>Categories</h2>
@@ -115,16 +114,31 @@
         </div>
       </section>
 
-      <!-- LIVE ORDERS -->
       <section class="panel" data-panel="live">
+        <div class="card kitchen-card">
+          <h2>Kitchen display</h2>
+          <p class="muted">Open this URL on another device on the same Wi-Fi to give kitchen staff their own screen.</p>
+          <div class="kitchen-url-row">
+            <code id="kitchen-url">…</code>
+            <button id="copy-kitchen-url">Copy</button>
+            <a id="open-kitchen-url" href="/kitchen/" target="_blank" class="link-button">Open</a>
+          </div>
+          <p class="muted" style="font-size:0.8rem; margin-top:0.5rem;">
+            Default kitchen PIN is <code>1234</code> — change it in Settings → Security.
+          </p>
+        </div>
+
         <div class="card">
           <h2>Live orders</h2>
-          <p class="muted">Same actions as the kitchen display — confirm, mark served, or reject.</p>
+          <p class="muted">Confirm new orders, mark served, or reject.</p>
           <div id="live-list"><p class="muted">loading…</p></div>
+          <p class="muted shortcut-hint">
+            Shortcuts: <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>C</kbd> confirm ·
+            <kbd>S</kbd> serve · <kbd>X</kbd> reject · <kbd>Enter</kbd> primary action
+          </p>
         </div>
       </section>
 
-      <!-- ORDER HISTORY -->
       <section class="panel" data-panel="orders">
         <div class="card">
           <h2>Order history</h2>
@@ -135,9 +149,9 @@
             <button id="hist-all">All time</button>
           </div>
           <div class="form-row">
-            <label style="align-self:center; color:#666; font-size:0.9rem;">From</label>
+            <label class="form-label">From</label>
             <input id="hist-from" type="date" style="flex:0 0 auto;" />
-            <label style="align-self:center; color:#666; font-size:0.9rem;">To</label>
+            <label class="form-label">To</label>
             <input id="hist-to" type="date" style="flex:0 0 auto;" />
             <button id="hist-apply" class="primary">Apply</button>
           </div>
@@ -146,7 +160,6 @@
         </div>
       </section>
 
-      <!-- SETTINGS -->
       <section class="panel" data-panel="settings">
         <div class="card">
           <h2>Restaurant settings</h2>
@@ -181,6 +194,33 @@
     </main>
   </section>
 
-  <script src="/admin/app.js?v=5"></script>
+  <div id="help-modal" class="modal">
+    <div class="modal-inner">
+      <h2>Keyboard shortcuts</h2>
+      <table class="shortcut-table">
+        <tr><td><kbd>1</kbd></td><td>Dashboard</td></tr>
+        <tr><td><kbd>2</kbd></td><td>Tables</td></tr>
+        <tr><td><kbd>3</kbd></td><td>Menu</td></tr>
+        <tr><td><kbd>4</kbd></td><td>Live orders</td></tr>
+        <tr><td><kbd>5</kbd></td><td>Order history</td></tr>
+        <tr><td><kbd>6</kbd></td><td>Settings</td></tr>
+        <tr><td><kbd>R</kbd></td><td>Refresh current tab</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close modal / sidebar</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
+        <tr><td colspan="2" style="padding-top: 0.75rem; color:#6b7280; font-size:0.85rem;"><strong>Live orders tab</strong></td></tr>
+        <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Navigate orders</td></tr>
+        <tr><td><kbd>C</kbd></td><td>Confirm selected order</td></tr>
+        <tr><td><kbd>S</kbd></td><td>Mark selected order served</td></tr>
+        <tr><td><kbd>X</kbd></td><td>Reject selected order</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Primary action</td></tr>
+      </table>
+      <h2 style="margin-top:1.5rem;">Kitchen display URL</h2>
+      <p class="muted">Share this with kitchen staff on another device:</p>
+      <code id="help-kitchen-url" class="code-block"></code>
+      <button class="primary" id="help-close" style="margin-top:1rem;">Close</button>
+    </div>
+  </div>
+
+  <script src="/admin/app.js?v=12"></script>
 </body>
 </html>
