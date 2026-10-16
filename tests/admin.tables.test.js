@@ -573,3 +573,15 @@ test('clear-session returns in_progress_count', async () => {
   assert.equal(res.body.in_progress_count, 2);
   db.close();
 });
+
+test('clear-session also resets last_activity_at', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await agent.post('/api/admin/tables').send({ table_number: 'T1' });
+  db.prepare('UPDATE tables SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?').run(t.body.id);
+
+  await agent.post(`/api/admin/tables/${t.body.id}/clear-session`).send();
+
+  const row = db.prepare('SELECT last_activity_at FROM tables WHERE id = ?').get(t.body.id);
+  assert.equal(row.last_activity_at, null);
+  db.close();
+});

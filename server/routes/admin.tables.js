@@ -160,6 +160,8 @@ export function adminTablesRouter({ db }) {
           AND session_ended_at IS NULL`
     ).run(id);
 
+    db.prepare('UPDATE tables SET last_activity_at = NULL WHERE id = ?').run(id);
+
     res.json({ cleared: result.changes, in_progress_count });
   });
 

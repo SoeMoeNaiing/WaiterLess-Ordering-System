@@ -547,3 +547,41 @@ test('customer list hides orders from ended sessions', async () => {
 
   db.close();
 });
+// ---------- Table activity tracking (11.1) ----------
+
+test('menu response includes last_activity_at as null for a fresh table', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const res = await request(app).get(`/api/customer/menu?token=${t.qr_token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.table.last_activity_at, null);
+  db.close();
+});
+
+test('placing an order stamps last_activity_at', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'X', price: 1 });
+
+  await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+
+  const row = db.prepare('SELECT last_activity_at FROM tables WHERE id = ?').get(t.id);
+  assert.ok(row.last_activity_at, 'should be stamped');
+  db.close();
+});
+
+test('menu response returns last_activity_at after an order', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'Y', price: 2 });
+
+  await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+
+  const res = await request(app).get(`/api/customer/menu?token=${t.qr_token}`);
+  assert.ok(res.body.table.last_activity_at);
+  db.close();
+});

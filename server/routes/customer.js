@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', '..', 'public', 'customer');
+const CUSTOMER_HTML = join(PUBLIC_DIR, 'index.html');
 
 function findTableByToken(db, token) {
   if (typeof token !== 'string' || token === '') return { error: 'missing' };
@@ -51,7 +52,14 @@ function validateItems(db, items) {
 export function customerRouter({ db }) {
   const router = Router();
 
-  // GET /t/:token/orders — all-orders page
+  router.get('/t/:token', (req, res) => {
+    const { error } = findTableByToken(db, req.params.token);
+    if (error === 'notfound') return res.status(404).send('Table not found');
+    if (error === 'inactive') return res.status(410).send('This table is no longer active');
+    if (error) return res.status(400).send('Missing token');
+    res.type('html').send(readFileSync(CUSTOMER_HTML, 'utf8'));
+  });
+
   router.get('/t/:token/orders', (req, res) => {
     const { error } = findTableByToken(db, req.params.token);
     if (error === 'notfound') return res.status(404).send('Table not found');
@@ -60,7 +68,6 @@ export function customerRouter({ db }) {
     res.type('html').send(readFileSync(join(PUBLIC_DIR, 'status.html'), 'utf8'));
   });
 
-  // GET /t/:token/order/:id — single order page (legacy, still supported)
   router.get('/t/:token/order/:id', (req, res) => {
     const { error } = findTableByToken(db, req.params.token);
     if (error === 'notfound') return res.status(404).send('Table not found');
@@ -69,16 +76,6 @@ export function customerRouter({ db }) {
     res.type('html').send(readFileSync(join(PUBLIC_DIR, 'status.html'), 'utf8'));
   });
 
-  // GET /t/:token — menu page
-  router.get('/t/:token', (req, res) => {
-    const { error } = findTableByToken(db, req.params.token);
-    if (error === 'notfound') return res.status(404).send('Table not found');
-    if (error === 'inactive') return res.status(410).send('This table is no longer active');
-    if (error) return res.status(400).send('Missing token');
-    res.type('html').send(readFileSync(join(PUBLIC_DIR, 'index.html'), 'utf8'));
-  });
-
-  // GET /api/customer/menu?token=...
   router.get('/api/customer/menu', (req, res) => {
     const { table, error } = findTableByToken(db, req.query.token);
     if (error === 'notfound') return res.status(404).json({ error: 'table not found' });
@@ -117,12 +114,16 @@ export function customerRouter({ db }) {
     }
 
     res.json({
-      table: { id: table.id, table_number: table.table_number, label: table.label },
+      table: {
+        id: table.id,
+        table_number: table.table_number,
+        label: table.label,
+        last_activity_at: table.last_activity_at || null,
+      },
       categories: result,
     });
   });
 
-  // POST /api/customer/orders
   router.post('/api/customer/orders', (req, res) => {
     const { token, items, notes } = req.body ?? {};
 
@@ -137,8 +138,7 @@ export function customerRouter({ db }) {
     const { resolved } = checked;
     const total = resolved.reduce((sum, r) => sum + r.price * r.qty, 0);
     const cleanNotes = typeof notes === 'string' && notes.trim() !== ''
-      ? notes.trim().slice(0, 500)
-      : null;
+      ? notes.trim().slice(0, 500) : null;
 
     let orderId;
     try {
@@ -147,15 +147,12 @@ export function customerRouter({ db }) {
           'INSERT INTO orders (table_id, total, notes) VALUES (?, ?, ?)'
         ).run(table.id, total, cleanNotes);
         const oid = orderResult.lastInsertRowid;
-
         const insertItem = db.prepare(
           `INSERT INTO order_items
              (order_id, menu_item_id, name_snapshot, price_snapshot, qty)
            VALUES (?, ?, ?, ?, ?)`
         );
-        for (const r of resolved) {
-          insertItem.run(oid, r.itemId, r.name, r.price, r.qty);
-        }
+        for (const r of resolved) insertItem.run(oid, r.itemId, r.name, r.price, r.qty);
         return oid;
       });
       orderId = insert();
@@ -169,10 +166,11 @@ export function customerRouter({ db }) {
       .prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id')
       .all(orderId);
 
+    db.prepare('UPDATE tables SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?').run(table.id);
+
     res.status(201).json({ order, items: orderItems });
   });
 
-  // GET /api/customer/orders?token=... — all orders for this table (last 12h)
   router.get('/api/customer/orders', (req, res) => {
     const { table, error } = findTableByToken(db, req.query.token);
     if (error === 'notfound') return res.status(404).json({ error: 'table not found' });
@@ -198,7 +196,6 @@ export function customerRouter({ db }) {
     });
   });
 
-  // GET /api/customer/orders/:id?token=... — single order
   router.get('/api/customer/orders/:id', (req, res) => {
     const orderId = Number(req.params.id);
     if (!Number.isInteger(orderId) || orderId <= 0) {
