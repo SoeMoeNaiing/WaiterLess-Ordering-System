@@ -73,7 +73,7 @@
           card.innerHTML = `
             <div class="table-name">${escapeHtml(t.table_number)}</div>
             ${t.label ? `<div class="table-label">${escapeHtml(t.label)}</div>` : ''}
-            <img src="/api/admin/tables/${t.id}/qr.png?size=400" alt="QR for ${escapeHtml(t.table_number)}" />
+            <img src="/api/admin/tables/${t.id}/qr.png?size=400&v=${encodeURIComponent(t.qr_token)}" alt="QR for ${escapeHtml(t.table_number)}" />
             <div class="callout">Scan to order</div>
             <div class="hint">${escapeHtml(url)}</div>
           `;

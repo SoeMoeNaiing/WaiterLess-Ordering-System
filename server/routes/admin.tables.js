@@ -180,6 +180,7 @@ export function adminTablesRouter({ db }) {
       const buf = await QRCode.toBuffer(target, {
         type: 'png', width: size, margin: 1, errorCorrectionLevel: 'M',
       });
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.type('png').send(buf);
     } catch (err) {
       console.error('[admin.tables] QR error:', err);

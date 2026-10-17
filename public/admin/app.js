@@ -137,7 +137,10 @@ function renderTable(tbl) {
   const checkbox = el('input', { type: 'checkbox', className: 'row-check', 'data-table-id': String(tbl.id) });
   checkbox.addEventListener('change', updatePrintSelectedButton);
 
-  const img = el('img', { src: `/api/admin/tables/${tbl.id}/qr.png?size=192`, alt: `QR for ${tbl.table_number}` });
+  const img = el('img', {
+    src: `/api/admin/tables/${tbl.id}/qr.png?size=192&v=${encodeURIComponent(tbl.qr_token)}`,
+    alt: `QR for ${tbl.table_number}`,
+  });
 
   const orderBadge = tbl.active_orders_count > 0
     ? el('span', { className: 'badge warn', text: `${tbl.active_orders_count} active` })
