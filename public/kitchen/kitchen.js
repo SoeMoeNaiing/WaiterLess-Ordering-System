@@ -26,6 +26,63 @@ function ageClass(mins) {
   return '';
 }
 
+// ---------- Sound ----------
+
+const SOUND_KEY = 'rs_kitchen_sound';
+let soundEnabled = localStorage.getItem(SOUND_KEY) !== '0';
+let seenOrderKeys = new Set();
+let seenOrderKeysInitialized = false;
+let audioCtx = null;
+
+function orderKey(o) { return `${o.id}:${o.created_at}`; }
+
+function updateSoundButton() {
+  const btn = $('sound-btn');
+  if (!btn) return;
+  btn.textContent = soundEnabled ? '🔔' : '🔕';
+  btn.classList.toggle('muted', !soundEnabled);
+  btn.title = soundEnabled ? 'Mute sound (M)' : 'Unmute sound (M)';
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0');
+  updateSoundButton();
+  if (soundEnabled) playNewOrderSound();
+}
+
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch { return null; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  return audioCtx;
+}
+
+function beep(freq, duration, delay = 0) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const start = ctx.currentTime + delay;
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(0.35, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.05);
+}
+
+function playNewOrderSound() {
+  if (!soundEnabled) return;
+  beep(880, 0.18, 0);
+  beep(1100, 0.18, 0.20);
+}
+
 // ---------- Auth ----------
 
 function showLogin() {
@@ -90,7 +147,7 @@ async function patchOrder(id, payload) {
   return res.json();
 }
 
-function renderOrder(o) {
+function renderOrder(o, isNew) {
   const mins = ageMinutes(o.created_at);
 
   const closeBtn = el('button', {
@@ -108,6 +165,7 @@ function renderOrder(o) {
     el('span', { className: 'table', text: `Table ${o.table_number}` }),
     el('span', { className: 'order-id', text: `#${o.id}` }),
     el('span', { className: 'age', text: `${mins}m` }),
+    isNew ? el('span', { className: 'new-badge', text: 'new' }) : null,
     closeBtn,
   ]);
 
@@ -126,7 +184,6 @@ function renderOrder(o) {
     nodes.push(el('div', { className: 'notes', text: `Note: ${o.notes}` }));
   }
 
-  // Status label + action buttons per state
   const actions = el('div', { className: 'actions' });
 
   if (o.status === 'placed') {
@@ -154,6 +211,7 @@ function renderOrder(o) {
   const cls = ['card', ageClass(mins)];
   if (o.status === 'preparing') cls.push('preparing');
   if (o.status === 'ready') cls.push('ready');
+  if (isNew) cls.push('row-pulse');
 
   return el('div', { className: cls.filter(Boolean).join(' ') }, nodes);
 }
@@ -169,13 +227,24 @@ async function refresh() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const orders = await res.json();
 
+    // Detect new orders via composite key (survives server restart)
+    const newKeys = new Set();
+    if (seenOrderKeysInitialized) {
+      for (const o of orders) {
+        if (!seenOrderKeys.has(orderKey(o))) newKeys.add(orderKey(o));
+      }
+      if (newKeys.size > 0) playNewOrderSound();
+    }
+    seenOrderKeys = new Set(orders.map(orderKey));
+    seenOrderKeysInitialized = true;
+
     const board = $('board');
     board.replaceChildren();
 
     if (orders.length === 0) {
       board.appendChild(el('div', { className: 'empty', text: 'No active orders.' }));
     } else {
-      for (const o of orders) board.appendChild(renderOrder(o));
+      for (const o of orders) board.appendChild(renderOrder(o, newKeys.has(orderKey(o))));
     }
 
     const now = new Date().toLocaleTimeString();
@@ -202,7 +271,25 @@ $('pin-submit').onclick = login;
 $('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
 $('logout-btn').onclick = logout;
 
+$('sound-btn')?.addEventListener('click', toggleSound);
+// Pre-warm audio on first user gesture (browsers require a gesture to play audio)
+document.addEventListener('click', ensureAudio, { once: true });
+document.addEventListener('keydown', ensureAudio, { once: true });
+
+// Keyboard: M toggles sound
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches('input, textarea, select')) return;
+  if (e.key === 'm' || e.key === 'M') {
+    e.preventDefault();
+    toggleSound();
+  }
+});
+
+updateSoundButton();
+
 async function boot() {
+  updateSoundButton();
+
   const res = await fetch('/api/kitchen/orders');
   if (res.ok) {
     showApp();

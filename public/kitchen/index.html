@@ -98,7 +98,41 @@
       font-size: 1.05rem;
     }
     .btn-done:hover { filter: brightness(1.15); }
-  </style>
+  
+    .sound-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #fff;
+      font-size: 1.1rem;
+      padding: 0.4rem 0.7rem;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-left: 0.5rem;
+    }
+    .sound-btn:hover { background: rgba(255,255,255,0.18); }
+    .sound-btn.muted { opacity: 0.4; }
+
+    @keyframes new-order-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(25,135,84,0.7); background-color: #1a2a1a; }
+      50%  { box-shadow: 0 0 0 8px rgba(25,135,84,0); background-color: #2a4a2a; }
+      100% { box-shadow: 0 0 0 0 rgba(25,135,84,0); background-color: #222; }
+    }
+    .card.row-pulse {
+      animation: new-order-pulse 1s ease-out 2;
+    }
+    .card .new-badge {
+      display: inline-block;
+      background: #198754;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      margin-left: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+</style>
 </head>
 <body>
 
@@ -116,6 +150,7 @@
     <header>
       <h1>Kitchen</h1>
       <span class="status" id="status">loading…</span>
+      <button class="sound-btn" id="sound-btn" title="Toggle sound (M)">🔔</button>
       <button class="logout-btn" id="logout-btn">Log out</button>
     </header>
     <div class="board" id="board">
@@ -123,6 +158,6 @@
     </div>
   </section>
 
-  <script src="/kitchen/kitchen.js"></script>
+  <script src="/kitchen/kitchen.js?v=4"></script>
 </body>
 </html>
