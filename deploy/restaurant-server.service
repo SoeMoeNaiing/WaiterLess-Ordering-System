@@ -1,0 +1,23 @@
+[Unit]
+Description=Restaurant QR Ordering Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=soemoenaing
+Group=soemoenaing
+WorkingDirectory=/home/soemoenaing/WaiterLess-Ordering-System/restaurant-server
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+
+# Hardening (optional, safe for this app)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
