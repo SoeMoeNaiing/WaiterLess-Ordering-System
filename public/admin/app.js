@@ -126,12 +126,17 @@ async function refresh() {
 
   if (tables.length === 0) {
     root.appendChild(el('p', { className: 'muted', text: 'No tables yet. Add one above.' }));
+    updatePrintSelectedButton();
     return;
   }
   for (const tbl of tables) root.appendChild(renderTable(tbl));
+  updatePrintSelectedButton();
 }
 
 function renderTable(tbl) {
+  const checkbox = el('input', { type: 'checkbox', className: 'row-check', 'data-table-id': String(tbl.id) });
+  checkbox.addEventListener('change', updatePrintSelectedButton);
+
   const img = el('img', { src: `/api/admin/tables/${tbl.id}/qr.png?size=192`, alt: `QR for ${tbl.table_number}` });
 
   const orderBadge = tbl.active_orders_count > 0
@@ -151,6 +156,30 @@ function renderTable(tbl) {
     el('div', { className: 'token', text: tbl.qr_token }),
   ]);
 
+  const rename = el('button', {
+    text: 'Rename',
+    onclick: async () => {
+      const newNum = prompt(`New table number for ${tbl.table_number}:`, tbl.table_number);
+      if (newNum === null) return;
+      const newLabel = prompt(`New label (optional):`, tbl.label || '');
+      if (newLabel === null) return;
+      try {
+        await api(`/api/admin/tables/${tbl.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            table_number: newNum.trim() || tbl.table_number,
+            label: newLabel.trim() || null,
+          }),
+        });
+        toast('Table renamed', 'success');
+        await refresh();
+      } catch (e) {
+        if (e.message === 'unauthorized') return;
+        toast(e.message, 'error');
+      }
+    },
+  });
+
   const regen = el('button', {
     text: t('admin.regenerate_qr'),
     onclick: async () => {
@@ -159,7 +188,15 @@ function renderTable(tbl) {
         await api(`/api/admin/tables/${tbl.id}/regenerate-token`, { method: 'POST' });
         toast('QR regenerated', 'success');
         await refresh();
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message === 'unauthorized') return;
+        if (e.message.includes('not found')) {
+          toast('Table no longer exists — refreshing list', 'warn');
+          await refresh();
+        } else {
+          toast(e.message, 'error');
+        }
+      }
     },
   });
 
@@ -191,11 +228,39 @@ function renderTable(tbl) {
           toast(`Cleared ${res.cleared} order(s)`, 'success');
         }
         await refresh();
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message === 'unauthorized') return;
+        if (e.message.includes('not found')) {
+          toast('Table no longer exists — refreshing list', 'warn');
+          await refresh();
+        } else {
+          toast(e.message, 'error');
+        }
+      }
     },
   });
 
-  return el('div', { className: 'row' }, [img, info, el('div', { className: 'actions' }, [regen, toggle, clear])]);
+  return el('div', { className: 'row' }, [
+    checkbox, img, info,
+    el('div', { className: 'actions' }, [rename, regen, toggle, clear]),
+  ]);
+}
+
+function getSelectedTableIds() {
+  return Array.from(document.querySelectorAll('.row-check:checked'))
+    .map((c) => c.dataset.tableId);
+}
+
+function updatePrintSelectedButton() {
+  const btn = $('print-selected');
+  if (!btn) return;
+  const ids = getSelectedTableIds();
+  if (ids.length === 0) {
+    btn.style.display = 'none';
+  } else {
+    btn.style.display = 'inline-block';
+    btn.textContent = `Print selected (${ids.length})`;
+  }
 }
 
 $('add-table').onclick = async () => {
@@ -602,20 +667,22 @@ function moveLiveSelection(delta) {
 
 // ---------- Order history ----------
 
-async function loadHistory(from, to) {
+async function loadHistory(range) {
+  const now = new Date();
+  let from = '';
+  if (range === 'today') from = ymd(now);
+  else if (range === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); from = ymd(d); }
+  else if (range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 30); from = ymd(d); }
+
+  const url = from ? `/api/admin/orders?from=${from}&limit=200` : '/api/admin/orders?limit=200';
   const msg = $('hist-summary');
   const root = $('hist-list');
   if (!msg || !root) return;
   msg.textContent = 'loading…';
   root.replaceChildren();
 
-  const params = new URLSearchParams();
-  if (from) params.set('from', from);
-  if (to) params.set('to', to);
-  params.set('limit', '500');
-
   try {
-    const data = await api(`/api/admin/orders?${params.toString()}`);
+    const data = await api(url);
     msg.textContent = `${data.total_count} order(s) — total ${data.total_sum.toFixed(2)}`;
     if (data.orders.length === 0) {
       root.appendChild(el('p', { className: 'muted', text: 'No orders in this range.' }));
@@ -644,18 +711,11 @@ async function loadHistory(from, to) {
 }
 
 function wireHistory() {
-  const todayBtn = $('hist-today');
-  if (!todayBtn) return;
-  const today = new Date();
-  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
-  const monthAgo = new Date(today); monthAgo.setDate(today.getDate() - 30);
-  const setDates = (from, to) => { $('hist-from').value = from || ''; $('hist-to').value = to || ''; };
-
-  todayBtn.onclick = () => { const s = ymd(today); setDates(s, s); loadHistory(s, s); };
-  $('hist-week').onclick = () => { const f = ymd(weekAgo), t2 = ymd(today); setDates(f, t2); loadHistory(f, t2); };
-  $('hist-month').onclick = () => { const f = ymd(monthAgo), t2 = ymd(today); setDates(f, t2); loadHistory(f, t2); };
-  $('hist-all').onclick = () => { setDates('', ''); loadHistory('', ''); };
-  $('hist-apply').onclick = () => loadHistory($('hist-from').value, $('hist-to').value);
+  if (!$('hist-today')) return;
+  $('hist-today').onclick = () => loadHistory('today');
+  $('hist-week').onclick = () => loadHistory('week');
+  $('hist-month').onclick = () => loadHistory('month');
+  $('hist-all').onclick = () => loadHistory('all');
 }
 
 // ---------- Settings ----------
@@ -834,16 +894,12 @@ function wireButtons() {
   const dashBtn = $('dash-refresh');
   if (dashBtn) dashBtn.onclick = () => refreshDashboard();
 
-  const kUrl = `${window.location.origin}/kitchen/`;
-  const kUrlEl = $('kitchen-url');
-  if (kUrlEl) kUrlEl.textContent = kUrl;
-  const kOpen = $('open-kitchen-url');
-  if (kOpen) kOpen.href = kUrl;
-  const kCopy = $('copy-kitchen-url');
-  if (kCopy) {
-    kCopy.onclick = async () => {
-      try { await navigator.clipboard.writeText(kUrl); toast('Kitchen URL copied', 'success'); }
-      catch { toast('Copy failed', 'error'); }
+  const btnPrintSel = $('print-selected');
+  if (btnPrintSel) {
+    btnPrintSel.onclick = () => {
+      const ids = getSelectedTableIds();
+      if (ids.length === 0) return;
+      window.open(`/admin/print.html?ids=${ids.join(',')}`, '_blank');
     };
   }
 }
@@ -858,10 +914,6 @@ async function loadApp() {
       refreshDashboard(),
     ]);
     wireHistory();
-    const today = ymd(new Date());
-    $('hist-from').value = today;
-    $('hist-to').value = today;
-    loadHistory(today, today);
     refreshLiveBadgeOnly();
   } catch (e) {
     if (e.message !== 'unauthorized') {

@@ -93,5 +93,9 @@
   "admin.reactivate": "Reactivate",
   "admin.clear_session": "Clear session",
   "admin.mark_unavailable": "Mark unavailable",
-  "admin.mark_available": "Mark available"
+  "admin.mark_available": "Mark available",
+  "busy.title": "Table already in use",
+  "busy.body": "Someone at {table} has already ordered recently. If you're at this table, tap Continue. If you scanned the wrong code, tap Back.",
+  "busy.continue": "Yes, I'm at this table",
+  "busy.back": "Back"
 }

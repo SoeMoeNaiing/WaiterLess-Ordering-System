@@ -629,3 +629,11 @@ code {
 }
 .icon-btn:hover { background: rgba(255,255,255,0.18); }
 .form-label { color: var(--text-muted); font-size: 0.85rem; }
+
+.row-check {
+  width: 20px; height: 20px;
+  cursor: pointer;
+  accent-color: var(--blue);
+  flex-shrink: 0;
+}
+.row .row-check { margin-right: 0.25rem; }
