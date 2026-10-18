@@ -8,6 +8,7 @@ import { kitchenAuthRouter } from './routes/kitchen.auth.js';
 import { adminTablesRouter } from './routes/admin.tables.js';
 import { adminCategoriesRouter } from './routes/admin.categories.js';
 import { adminMenuItemsRouter } from './routes/admin.menu-items.js';
+import { adminMenuOptionsRouter } from './routes/admin.menu-options.js';
 import { adminUploadRouter } from './routes/admin.upload.js';
 import { adminSettingsRouter } from './routes/admin.settings.js';
 import { adminOrdersRouter } from './routes/admin.orders.js';
@@ -53,6 +54,7 @@ export function createApp({ db } = {}) {
     app.use('/api/admin/tables', requireAdmin, adminTablesRouter({ db }));
     app.use('/api/admin/categories', requireAdmin, adminCategoriesRouter({ db }));
     app.use('/api/admin/menu-items', requireAdmin, adminMenuItemsRouter({ db }));
+    app.use('/api/admin/menu-items/:itemId/options', requireAdmin, adminMenuOptionsRouter({ db }));
     app.use('/api/admin/upload', requireAdmin, adminUploadRouter());
     app.use('/api/admin/settings', requireAdmin, adminSettingsRouter({ db }));
     app.use('/api/admin/orders', requireAdmin, adminOrdersRouter({ db }));
