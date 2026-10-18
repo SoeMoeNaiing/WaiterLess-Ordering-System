@@ -470,7 +470,12 @@ function renderMenuItem(item, cats) {
     }),
   ]);
 
-  return el('div', { className: 'row' }, [img, info, el('div', { className: 'actions' }, [uploadBtn, save, avail, del]), upload]);
+  const customize = el('button', {
+    text: 'Customize',
+    onclick: () => openOptionsModal(item.id, item.name),
+  });
+
+  return el('div', { className: 'row' }, [img, info, el('div', { className: 'actions' }, [uploadBtn, customize, save, avail, del]), upload]);
 }
 
 $('add-item').onclick = async () => {
@@ -969,3 +974,244 @@ async function boot() {
 }
 
 boot();
+
+// ---------- Menu item options modal ----------
+
+let draftOptions = [];
+let currentModalItemId = null;
+let currentModalItemName = '';
+
+async function openOptionsModal(itemId, itemName) {
+  currentModalItemId = itemId;
+  currentModalItemName = itemName;
+  draftOptions = [];
+
+  try {
+    const res = await api(`/api/admin/menu-items/${itemId}/options`);
+    draftOptions = (res.groups || []).map((g) => ({
+      name: g.name,
+      is_required: Boolean(g.is_required),
+      is_single_choice: Boolean(g.is_single_choice),
+      choices: (g.choices || []).map((c) => ({
+        name: c.name,
+        is_default: Boolean(c.is_default),
+      })),
+    }));
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    toast('Failed to load options: ' + e.message, 'error');
+    return;
+  }
+
+  renderOptionsModal();
+  $('options-modal').classList.add('open');
+}
+
+function closeOptionsModal() {
+  $('options-modal').classList.remove('open');
+  draftOptions = [];
+  currentModalItemId = null;
+  currentModalItemName = '';
+}
+
+function renderOptionsModal() {
+  const body = $('options-modal-body');
+  if (!body) return;
+  body.replaceChildren();
+
+  body.appendChild(el('div', { className: 'modal-item-name', text: currentModalItemName }));
+
+  if (draftOptions.length === 0) {
+    body.appendChild(el('p', { className: 'muted', text: 'No options yet. Add a group below.' }));
+  }
+
+  draftOptions.forEach((group, gi) => {
+    body.appendChild(renderGroupRow(group, gi));
+  });
+
+  body.appendChild(el('button', {
+    className: 'modal-add-group',
+    text: '+ Add group',
+    onclick: () => {
+      draftOptions.push({
+        name: '',
+        is_required: false,
+        is_single_choice: true,
+        choices: [{ name: '', is_default: true }],
+      });
+      renderOptionsModal();
+    },
+  }));
+}
+
+function renderGroupRow(group, gi) {
+  const nameInput = el('input', {
+    type: 'text',
+    className: 'group-name-input',
+    value: group.name,
+    placeholder: 'Group name (e.g. Spice Level)',
+  });
+  nameInput.addEventListener('input', (e) => { draftOptions[gi].name = e.target.value; });
+
+  const requiredCheck = el('input', {
+    type: 'checkbox',
+    checked: group.is_required,
+  });
+  requiredCheck.addEventListener('change', (e) => {
+    draftOptions[gi].is_required = e.target.checked;
+  });
+
+  const singleCheck = el('input', {
+    type: 'checkbox',
+    checked: group.is_single_choice,
+  });
+  singleCheck.addEventListener('change', (e) => {
+    draftOptions[gi].is_single_choice = e.target.checked;
+    if (e.target.checked) {
+      // Enforce only one default
+      let seen = false;
+      for (const c of draftOptions[gi].choices) {
+        if (c.is_default) {
+          if (seen) c.is_default = false;
+          else seen = true;
+        }
+      }
+    }
+    renderOptionsModal();
+  });
+
+  const choicesContainer = el('div', { className: 'choices-container' });
+  group.choices.forEach((choice, ci) => {
+    choicesContainer.appendChild(renderChoiceRow(group, gi, choice, ci));
+  });
+
+  const addChoiceBtn = el('button', {
+    className: 'add-choice-btn',
+    text: '+ Add choice',
+    onclick: () => {
+      draftOptions[gi].choices.push({ name: '', is_default: false });
+      renderOptionsModal();
+    },
+  });
+
+  const removeGroupBtn = el('button', {
+    className: 'remove-group-btn',
+    text: '\u00d7',
+    title: 'Remove group',
+    onclick: () => {
+      if (!confirm(`Remove group "${group.name || 'unnamed'}"?`)) return;
+      draftOptions.splice(gi, 1);
+      renderOptionsModal();
+    },
+  });
+
+  return el('div', { className: 'modal-group' }, [
+    el('div', { className: 'group-header' }, [nameInput, removeGroupBtn]),
+    el('div', { className: 'group-flags' }, [
+      el('label', {}, [requiredCheck, ' Required']),
+      el('label', {}, [singleCheck, ' Single choice']),
+    ]),
+    choicesContainer,
+    addChoiceBtn,
+  ]);
+}
+
+function renderChoiceRow(group, gi, choice, ci) {
+  const nameInput = el('input', {
+    type: 'text',
+    className: 'choice-name-input',
+    value: choice.name,
+    placeholder: 'Choice name',
+  });
+  nameInput.addEventListener('input', (e) => {
+    draftOptions[gi].choices[ci].name = e.target.value;
+  });
+
+  const isSingle = group.is_single_choice;
+  const defaultInput = el('input', {
+    type: isSingle ? 'radio' : 'checkbox',
+    name: isSingle ? `group-${gi}-default` : undefined,
+    checked: choice.is_default,
+  });
+  defaultInput.addEventListener('change', (e) => {
+    if (isSingle) {
+      draftOptions[gi].choices.forEach((c, i) => { c.is_default = (i === ci); });
+    } else {
+      draftOptions[gi].choices[ci].is_default = e.target.checked;
+    }
+  });
+
+  const removeBtn = el('button', {
+    className: 'remove-choice-btn',
+    text: '\u00d7',
+    title: 'Remove choice',
+    onclick: () => {
+      draftOptions[gi].choices.splice(ci, 1);
+      renderOptionsModal();
+    },
+  });
+
+  return el('div', { className: 'choice-row' }, [
+    nameInput,
+    el('label', { className: 'choice-default-label' }, [defaultInput, ' Default']),
+    removeBtn,
+  ]);
+}
+
+async function saveOptionsModal() {
+  // Validate
+  for (const group of draftOptions) {
+    if (!group.name.trim()) { toast('Every group needs a name', 'warn'); return; }
+    if (group.choices.length === 0) {
+      toast(`Group "${group.name}" needs at least one choice`, 'warn');
+      return;
+    }
+    for (const c of group.choices) {
+      if (!c.name.trim()) {
+        toast(`Group "${group.name}" has an empty choice`, 'warn');
+        return;
+      }
+    }
+    if (group.is_required && group.is_single_choice) {
+      const defaults = group.choices.filter((c) => c.is_default).length;
+      if (defaults !== 1) {
+        toast(`Group "${group.name}": required single-choice needs exactly one default`, 'warn');
+        return;
+      }
+    }
+    if (group.is_single_choice && group.choices.filter((c) => c.is_default).length > 1) {
+      toast(`Group "${group.name}": only one choice can be default`, 'warn');
+      return;
+    }
+  }
+
+  try {
+    await api(`/api/admin/menu-items/${currentModalItemId}/options`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        groups: draftOptions.map((g) => ({
+          name: g.name.trim(),
+          is_required: g.is_required,
+          is_single_choice: g.is_single_choice,
+          choices: g.choices.map((c) => ({
+            name: c.name.trim(),
+            is_default: c.is_default,
+          })),
+        })),
+      }),
+    });
+    toast('Options saved', 'success');
+    closeOptionsModal();
+    await refreshMenuItems();
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    toast(e.message, 'error');
+  }
+}
+
+// Modal event wiring (idempotent — safe if script loads twice)
+$('options-save')?.addEventListener('click', saveOptionsModal);
+$('options-cancel')?.addEventListener('click', closeOptionsModal);
+$('options-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'options-modal') closeOptionsModal();
+});
