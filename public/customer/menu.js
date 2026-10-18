@@ -24,7 +24,8 @@ function el(tag, attrs = {}, children = []) {
 }
 
 function formatPrice(n) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
+  const num = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
+  return currencySymbol ? `${num} ${currencySymbol}` : num;
 }
 
 // ---------- State ----------
@@ -33,6 +34,25 @@ let currentMenu = null;
 let lastMenuData = null;
 let menuByItemId = new Map();
 let cart = [];
+
+// Settings cache (currency, restaurant name)
+let currencySymbol = '';
+let restaurantName = '';
+
+async function loadPublicSettings() {
+  try {
+    const s = await fetch('/api/public/settings').then((r) => r.json());
+    currencySymbol = s.currency || '';
+    restaurantName = s.restaurant_name || '';
+    if (restaurantName) {
+      document.title = restaurantName;
+      const h = $('restaurant');
+      if (h) h.textContent = restaurantName;
+    }
+  } catch (e) {
+    console.warn('[settings] load failed', e);
+  }
+}
 
 // ---------- Cart ----------
 
@@ -235,6 +255,7 @@ async function boot() {
 
   await initI18n();
   applyTranslations();
+  await loadPublicSettings();
 
   // Reflect the current language and wire the switcher
   const langSelect = $('lang-select');

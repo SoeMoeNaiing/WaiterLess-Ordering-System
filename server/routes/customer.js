@@ -24,7 +24,7 @@ function validateItems(db, items) {
     if (!entry || typeof entry !== 'object') {
       return { ok: false, status: 400, error: 'each item must be an object' };
     }
-    const { itemId, qty } = entry;
+    const { itemId, qty, notes } = entry;
     if (!Number.isInteger(itemId) || itemId <= 0) {
       return { ok: false, status: 400, error: 'itemId must be a positive integer' };
     }
@@ -44,7 +44,12 @@ function validateItems(db, items) {
       return { ok: false, status: 400, error: `item ${itemId} is not available` };
     }
     if (!row.is_available) return { ok: false, status: 400, error: `item ${itemId} is sold out` };
-    resolved.push({ itemId: row.id, qty, name: row.name, price: row.price });
+
+    const cleanNotes = typeof notes === 'string' && notes.trim() !== ''
+      ? notes.trim().slice(0, 200)
+      : null;
+
+    resolved.push({ itemId: row.id, qty, name: row.name, price: row.price, notes: cleanNotes });
   }
   return { ok: true, resolved };
 }
@@ -149,10 +154,10 @@ export function customerRouter({ db }) {
         const oid = orderResult.lastInsertRowid;
         const insertItem = db.prepare(
           `INSERT INTO order_items
-             (order_id, menu_item_id, name_snapshot, price_snapshot, qty)
-           VALUES (?, ?, ?, ?, ?)`
+             (order_id, menu_item_id, name_snapshot, price_snapshot, qty, notes)
+           VALUES (?, ?, ?, ?, ?, ?)`
         );
-        for (const r of resolved) insertItem.run(oid, r.itemId, r.name, r.price, r.qty);
+        for (const r of resolved) insertItem.run(oid, r.itemId, r.name, r.price, r.qty, r.notes);
         return oid;
       });
       orderId = insert();

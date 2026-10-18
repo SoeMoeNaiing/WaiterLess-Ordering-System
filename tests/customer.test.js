@@ -585,3 +585,88 @@ test('menu response returns last_activity_at after an order', async () => {
   assert.ok(res.body.table.last_activity_at);
   db.close();
 });
+
+// ---------- Per-item notes (11.3b) ----------
+
+test('per-item notes are stored on the order', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'Burger', price: 5 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1, notes: 'no onions' }],
+  });
+
+  assert.equal(res.status, 201);
+  const row = db.prepare('SELECT notes FROM order_items WHERE order_id = ?').get(res.body.order.id);
+  assert.equal(row.notes, 'no onions');
+  db.close();
+});
+
+test('missing item notes default to null', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'Fries', price: 2 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1 }],
+  });
+
+  assert.equal(res.status, 201);
+  const row = db.prepare('SELECT notes FROM order_items WHERE order_id = ?').get(res.body.order.id);
+  assert.equal(row.notes, null);
+  db.close();
+});
+
+test('per-item notes are trimmed and capped at 200 chars', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'Soup', price: 3 });
+
+  const long = '  ' + 'x'.repeat(250) + '  ';
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1, notes: long }],
+  });
+
+  assert.equal(res.status, 201);
+  const row = db.prepare('SELECT notes FROM order_items WHERE order_id = ?').get(res.body.order.id);
+  assert.equal(row.notes.length, 200);
+  assert.equal(row.notes, 'x'.repeat(200));
+  db.close();
+});
+
+test('blank per-item notes become null', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'Tea', price: 1 });
+
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1, notes: '   ' }],
+  });
+
+  assert.equal(res.status, 201);
+  const row = db.prepare('SELECT notes FROM order_items WHERE order_id = ?').get(res.body.order.id);
+  assert.equal(row.notes, null);
+  db.close();
+});
+
+test('kitchen API returns per-item notes', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'Pasta', price: 6 });
+
+  await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1, notes: 'extra cheese' }],
+  });
+
+  const res = await agent.get('/api/kitchen/orders');
+  assert.equal(res.status, 200);
+  assert.equal(res.body[0].items[0].notes, 'extra cheese');
+  db.close();
+});
