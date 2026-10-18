@@ -305,10 +305,19 @@ export function customerRouter({ db }) {
     const itemsStmt = db.prepare(
       'SELECT id, name_snapshot, price_snapshot, qty, notes FROM order_items WHERE order_id = ? ORDER BY id'
     );
+    const optionsStmt = db.prepare(
+      'SELECT group_name_snapshot, choice_name_snapshot FROM order_item_options WHERE order_item_id = ?'
+    );
 
     res.json({
       table: { id: table.id, table_number: table.table_number, label: table.label },
-      orders: orders.map((o) => ({ ...o, items: itemsStmt.all(o.id) })),
+      orders: orders.map((o) => ({
+        ...o,
+        items: itemsStmt.all(o.id).map((it) => ({
+          ...it,
+          options: optionsStmt.all(it.id),
+        })),
+      })),
     });
   });
 

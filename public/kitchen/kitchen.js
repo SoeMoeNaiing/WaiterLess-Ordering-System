@@ -169,16 +169,24 @@ function renderOrder(o, isNew) {
     closeBtn,
   ]);
 
-  const items = el('ul', { className: 'items' },
-    o.items.map((it) =>
-      el('li', {}, [
-        el('span', { className: 'qty', text: `${it.qty}\u00d7` }),
-        el('span', { text: it.name_snapshot }),
-      ])
-    )
-  );
+  const itemsList = el('ul', { className: 'items' });
 
-  const nodes = [head, items];
+  for (const it of o.items) {
+    const opts = Array.isArray(it.options) ? it.options : [];
+    const optText = opts.map((x) => x.choice_name_snapshot).join(' \u00b7 ');
+
+    const line = el('li', { className: 'item-line' }, [
+      el('div', { className: 'item-main' }, [
+        el('span', { className: 'qty', text: `${it.qty}\u00d7` }),
+        el('span', { className: 'item-name', text: it.name_snapshot }),
+      ]),
+      optText ? el('div', { className: 'item-options', text: optText }) : null,
+      it.notes ? el('div', { className: 'item-notes', text: `\u201c${it.notes}\u201d` }) : null,
+    ]);
+    itemsList.appendChild(line);
+  }
+
+  const nodes = [head, itemsList];
 
   if (o.notes) {
     nodes.push(el('div', { className: 'notes', text: `Note: ${o.notes}` }));

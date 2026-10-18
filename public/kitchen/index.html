@@ -132,6 +132,37 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
+
+    /* New item layout (overrides old .items li flex) */
+    .items { list-style: none; margin: 0; padding: 0; }
+    .items .item-line {
+      display: block;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #333;
+      font-size: 1.05rem;
+    }
+    .items .item-line:last-child { border-bottom: none; }
+    .item-line .item-main {
+      display: flex;
+      gap: 0.5rem;
+      align-items: baseline;
+    }
+    .item-line .qty { font-weight: 700; color: #6cbe6c; min-width: 2rem; }
+    .item-line .item-name { flex: 1; }
+    .item-line .item-options {
+      font-size: 0.85rem;
+      color: #6cbe6c;
+      margin-top: 0.25rem;
+      padding-left: 2.5rem;
+      font-weight: 600;
+    }
+    .item-line .item-notes {
+      font-size: 0.78rem;
+      color: #ffc107;
+      margin-top: 0.2rem;
+      padding-left: 2.5rem;
+      font-style: italic;
+    }
 </style>
 </head>
 <body>
@@ -158,6 +189,6 @@
     </div>
   </section>
 
-  <script src="/kitchen/kitchen.js?v=4"></script>
+  <script src="/kitchen/kitchen.js?v=7"></script>
 </body>
 </html>
