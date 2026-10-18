@@ -55,7 +55,20 @@ export function kitchenRouter({ db }) {
         ORDER BY id`
     );
 
-    res.json(orders.map((o) => ({ ...o, items: itemsStmt.all(o.id) })));
+    // Attach options (snapshot data) to each item
+    const optionsStmt = db.prepare(
+      'SELECT group_name_snapshot, choice_name_snapshot FROM order_item_options WHERE order_item_id = ?'
+    );
+
+    const enrichOrder = (o) => {
+      const items = itemsStmt.all(o.id).map((it) => ({
+        ...it,
+        options: optionsStmt.all(it.id),
+      }));
+      return { ...o, items };
+    };
+
+    res.json(orders.map(enrichOrder));
   });
 
   // PATCH /api/kitchen/orders/:id — update status and/or notes

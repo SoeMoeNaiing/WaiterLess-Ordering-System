@@ -24,13 +24,14 @@ function validateItems(db, items) {
     if (!entry || typeof entry !== 'object') {
       return { ok: false, status: 400, error: 'each item must be an object' };
     }
-    const { itemId, qty, notes } = entry;
+    const { itemId, qty, notes, selections } = entry;
     if (!Number.isInteger(itemId) || itemId <= 0) {
       return { ok: false, status: 400, error: 'itemId must be a positive integer' };
     }
     if (!Number.isInteger(qty) || qty <= 0 || qty > 99) {
       return { ok: false, status: 400, error: 'qty must be between 1 and 99' };
     }
+
     const row = db.prepare(
       `SELECT mi.id, mi.name, mi.price, mi.is_active, mi.is_available,
               mi.category_id, c.is_active AS cat_active
@@ -45,11 +46,80 @@ function validateItems(db, items) {
     }
     if (!row.is_available) return { ok: false, status: 400, error: `item ${itemId} is sold out` };
 
+    // Validate selections against this item's option groups
+    const groups = db.prepare(
+      'SELECT * FROM menu_item_option_groups WHERE menu_item_id = ? ORDER BY sort_order, id'
+    ).all(itemId);
+    const groupsById = new Map(groups.map((g) => [g.id, g]));
+
+    const choicesByGroup = new Map();
+    for (const g of groups) {
+      choicesByGroup.set(g.id, db.prepare(
+        'SELECT id, name FROM menu_item_option_choices WHERE group_id = ?'
+      ).all(g.id));
+    }
+
+    const incoming = Array.isArray(selections) ? selections : [];
+    const groupedSelections = new Map(); // group_id -> [choice_id]
+    for (const sel of incoming) {
+      if (!sel || typeof sel !== 'object') {
+        return { ok: false, status: 400, error: `item ${itemId}: selection must be an object` };
+      }
+      if (!Number.isInteger(sel.group_id) || !groupsById.has(sel.group_id)) {
+        return { ok: false, status: 400, error: `item ${itemId}: invalid group_id ${sel.group_id}` };
+      }
+      if (!Number.isInteger(sel.choice_id)) {
+        return { ok: false, status: 400, error: `item ${itemId}: invalid choice_id` };
+      }
+      const validChoices = choicesByGroup.get(sel.group_id) || [];
+      if (!validChoices.find((c) => c.id === sel.choice_id)) {
+        return { ok: false, status: 400, error: `item ${itemId}: choice ${sel.choice_id} does not belong to group ${sel.group_id}` };
+      }
+      if (!groupedSelections.has(sel.group_id)) groupedSelections.set(sel.group_id, []);
+      const arr = groupedSelections.get(sel.group_id);
+      if (arr.includes(sel.choice_id)) {
+        return { ok: false, status: 400, error: `item ${itemId}: duplicate choice ${sel.choice_id}` };
+      }
+      arr.push(sel.choice_id);
+    }
+
+    // Enforce required + single-choice rules
+    for (const g of groups) {
+      const picked = groupedSelections.get(g.id) || [];
+      if (g.is_required && picked.length === 0) {
+        return { ok: false, status: 400, error: `item ${itemId}: "${g.name}" is required` };
+      }
+      if (g.is_single_choice && picked.length > 1) {
+        return { ok: false, status: 400, error: `item ${itemId}: "${g.name}" allows only one choice` };
+      }
+    }
+
+    // Flatten with snapshots for storage
+    const snapshotSelections = [];
+    for (const [groupId, choiceIds] of groupedSelections) {
+      const g = groupsById.get(groupId);
+      const validChoices = choicesByGroup.get(groupId) || [];
+      for (const cid of choiceIds) {
+        const c = validChoices.find((x) => x.id === cid);
+        snapshotSelections.push({
+          group_name: g.name,
+          choice_name: c.name,
+        });
+      }
+    }
+
     const cleanNotes = typeof notes === 'string' && notes.trim() !== ''
       ? notes.trim().slice(0, 200)
       : null;
 
-    resolved.push({ itemId: row.id, qty, name: row.name, price: row.price, notes: cleanNotes });
+    resolved.push({
+      itemId: row.id,
+      qty,
+      name: row.name,
+      price: row.price,
+      notes: cleanNotes,
+      selections: snapshotSelections,
+    });
   }
   return { ok: true, resolved };
 }
@@ -110,6 +180,36 @@ export function customerRouter({ db }) {
       }
     }
 
+    // Enrich each item with its option groups
+    const enrichItem = (it) => {
+      const groups = db.prepare(
+        'SELECT * FROM menu_item_option_groups WHERE menu_item_id = ? ORDER BY sort_order, id'
+      ).all(it.id);
+
+      if (groups.length === 0) return { ...it, option_groups: [] };
+
+      const choicesStmt = db.prepare(
+        'SELECT id, name, is_default FROM menu_item_option_choices WHERE group_id = ? ORDER BY sort_order, id'
+      );
+
+      return {
+        ...it,
+        option_groups: groups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          is_required: g.is_required,
+          is_single_choice: g.is_single_choice,
+          choices: choicesStmt.all(g.id),
+        })),
+      };
+    };
+
+    for (const cat of byCategory.keys ? byCategory : []) {} // no-op safety
+    for (const arr of byCategory.values()) {
+      for (let i = 0; i < arr.length; i++) arr[i] = enrichItem(arr[i]);
+    }
+    for (let i = 0; i < uncategorized.length; i++) uncategorized[i] = enrichItem(uncategorized[i]);
+
     const result = categories
       .map((c) => ({ id: c.id, name: c.name, items: byCategory.get(c.id) }))
       .filter((c) => c.items.length > 0);
@@ -157,7 +257,18 @@ export function customerRouter({ db }) {
              (order_id, menu_item_id, name_snapshot, price_snapshot, qty, notes)
            VALUES (?, ?, ?, ?, ?, ?)`
         );
-        for (const r of resolved) insertItem.run(oid, r.itemId, r.name, r.price, r.qty, r.notes);
+        const insertOption = db.prepare(
+          `INSERT INTO order_item_options
+             (order_item_id, group_name_snapshot, choice_name_snapshot)
+           VALUES (?, ?, ?)`
+        );
+        for (const r of resolved) {
+          const result = insertItem.run(oid, r.itemId, r.name, r.price, r.qty, r.notes);
+          const orderItemId = result.lastInsertRowid;
+          for (const sel of r.selections || []) {
+            insertOption.run(orderItemId, sel.group_name, sel.choice_name);
+          }
+        }
         return oid;
       });
       orderId = insert();
