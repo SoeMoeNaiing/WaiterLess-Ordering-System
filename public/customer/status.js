@@ -1,5 +1,8 @@
 import { initI18n, t, getLang, setLang, applyTranslations } from '/i18n/i18n.js';
 
+// Socket.IO client loaded via UMD in status.html
+const io = window.io;
+
 const $ = (id) => document.getElementById(id);
 
 function parseUrl() {
@@ -87,6 +90,11 @@ function renderOrderCard(order) {
 }
 
 function render(orders, token) {
+  // Subscribe to live updates for these orders
+  if (orders.length > 0) {
+    connectStatusSocket(new Set(orders.map((o) => o.id)));
+  }
+
   const root = $('root');
   root.replaceChildren();
 
@@ -148,6 +156,60 @@ async function refresh() {
   }
 }
 
+// ---------- Socket.IO (live order status) ----------
+
+let statusSocket = null;
+let watchedOrderIds = new Set();
+
+function connectStatusSocket(orderIds) {
+  if (typeof io !== 'function') {
+    console.warn('[status socket] io client not loaded');
+    return;
+  }
+
+  // Reconnect if we have a new set of orders to watch
+  if (statusSocket && [...orderIds].some((id) => !watchedOrderIds.has(id))) {
+    // Join new rooms on existing socket
+    for (const id of orderIds) {
+      if (!watchedOrderIds.has(id)) {
+        statusSocket.emit('watch:order', { orderId: id });
+        watchedOrderIds.add(id);
+      }
+    }
+    return;
+  }
+
+  if (statusSocket) return;
+
+  statusSocket = io({
+    path: '/socket.io/',
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+  });
+
+  statusSocket.on('connect', () => {
+    console.log('[status socket] connected');
+    for (const id of orderIds) {
+      statusSocket.emit('watch:order', { orderId: id });
+      watchedOrderIds.add(id);
+    }
+  });
+
+  statusSocket.on('order:updated', (payload) => {
+    console.log('[status socket] order:updated', payload);
+    lastSnapshot = '';
+    refresh();
+  });
+
+  statusSocket.on('disconnect', (reason) => {
+    console.log('[status socket] disconnected:', reason);
+  });
+
+  statusSocket.on('connect_error', (err) => {
+    console.warn('[status socket] connect_error:', err.message);
+  });
+}
+
 async function boot() {
   await initI18n();
   applyTranslations();
@@ -163,7 +225,7 @@ async function boot() {
   }
 
   refresh();
-  setInterval(refresh, 3000);
+  setInterval(refresh, 30000); // 30s safety net — socket is primary
 }
 
 boot();

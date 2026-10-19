@@ -764,3 +764,15 @@ code {
   padding-top: 1rem;
   border-top: 1px solid var(--border-soft);
 }
+
+.live-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #666;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.live-dot.live { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.live-dot.polling { background: #fbbf24; }

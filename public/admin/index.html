@@ -30,6 +30,7 @@
       <div class="brand">
         <span id="brand-name">Restaurant</span>
         <span class="sub" data-i18n="admin.sub">Admin</span>
+        <span class="live-dot" id="admin-live-dot" title="Connecting…"></span>
       </div>
       <div class="spacer"></div>
       <select id="lang-select-admin" class="lang-select" aria-label="Language">
@@ -220,6 +221,7 @@
     </div>
   </div>
 
-<script type="module" src="/admin/app.js?v=30"></script>
+<script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/admin/app.js?v=23"></script>
 </body>
 </html>

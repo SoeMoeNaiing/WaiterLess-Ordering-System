@@ -1,5 +1,8 @@
 import { initI18n, t, getLang, setLang, applyTranslations } from '/i18n/i18n.js';
 
+// Socket.IO client loaded via UMD in index.html
+const io = window.io;
+
 const $ = (id) => document.getElementById(id);
 
 const TAB_ORDER = ['dashboard', 'tables', 'menu', 'live', 'orders', 'settings'];
@@ -75,6 +78,7 @@ function ymd(date) { return date.toLocaleDateString('en-CA'); }
 
 function showLogin() {
   isLoggedIn = false;
+  disconnectAdminSocket();
   $('splash')?.classList.add('hide');
   $('login-view').style.display = 'block';
   $('app-view').style.display = 'none';
@@ -108,10 +112,12 @@ async function login() {
     return;
   }
   showApp();
+  connectAdminSocket();
   loadApp();
 }
 
 async function logout() {
+  disconnectAdminSocket();
   await fetch('/api/admin/auth/logout', { method: 'POST' });
   showLogin();
 }
@@ -869,6 +875,88 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') { e.preventDefault(); refreshActiveTab(); }
 });
 
+// ---------- Socket.IO ----------
+
+let adminSocket = null;
+
+function updateAdminLiveDot(state) {
+  const dot = document.getElementById('admin-live-dot');
+  if (!dot) return;
+  dot.classList.remove('live', 'polling');
+  if (state === 'live') {
+    dot.classList.add('live');
+    dot.title = 'Live (instant updates)';
+  } else if (state === 'polling') {
+    dot.classList.add('polling');
+    dot.title = 'Polling fallback (socket disconnected)';
+  } else {
+    dot.title = 'Connecting…';
+  }
+}
+
+function connectAdminSocket() {
+  if (adminSocket) return;
+  if (typeof io !== 'function') {
+    console.warn('[admin socket] io client not loaded');
+    updateAdminLiveDot('polling');
+    return;
+  }
+
+  adminSocket = io({
+    path: '/socket.io/',
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+  });
+
+  adminSocket.on('connected', (data) => {
+    console.log('[admin socket] connected, scope:', data?.scope);
+    updateAdminLiveDot('live');
+    refreshLive();
+    refreshDashboard();
+    refreshLiveBadgeOnly();
+  });
+
+  adminSocket.on('order:new', (payload) => {
+    console.log('[admin socket] order:new', payload?.order?.id);
+    refreshLive();
+    refreshDashboard();
+    refreshLiveBadgeOnly();
+  });
+
+  adminSocket.on('order:updated', (payload) => {
+    console.log('[admin socket] order:updated', payload?.order?.id || payload?.orderId);
+    refreshLive();
+    refreshDashboard();
+    refreshLiveBadgeOnly();
+  });
+
+  adminSocket.on('disconnect', (reason) => {
+    console.log('[admin socket] disconnected:', reason);
+    updateAdminLiveDot('polling');
+  });
+
+  adminSocket.on('connect_error', (err) => {
+    console.warn('[admin socket] connect_error:', err.message);
+    updateAdminLiveDot('polling');
+  });
+
+  adminSocket.io.on('reconnect', () => {
+    console.log('[admin socket] reconnected');
+    updateAdminLiveDot('live');
+    refreshLive();
+    refreshDashboard();
+    refreshLiveBadgeOnly();
+  });
+}
+
+function disconnectAdminSocket() {
+  if (adminSocket) {
+    adminSocket.disconnect();
+    adminSocket = null;
+  }
+  updateAdminLiveDot('polling');
+}
+
 // ---------- Boot ----------
 
 function wireTabs() {
@@ -958,19 +1046,20 @@ async function boot() {
   const res = await fetch('/api/admin/tables');
   if (res.ok) {
     showApp();
+    connectAdminSocket();
     loadApp();
   } else {
     showLogin();
   }
 
-  setInterval(refreshLiveBadgeOnly, 8000);
+  setInterval(refreshLiveBadgeOnly, 60000); // 60s safety net
   setInterval(() => {
     const active = document.querySelector('.tab.active');
     if (!active) return;
     const tab = active.dataset.tab;
     if (tab === 'live') refreshLive();
     if (tab === 'dashboard') refreshDashboard();
-  }, 4000);
+  }, 30000); // 30s safety net — socket is primary
 }
 
 boot();
