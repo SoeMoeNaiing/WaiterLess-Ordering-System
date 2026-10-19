@@ -39,6 +39,8 @@
       border-bottom: 1px solid rgba(0,0,0,0.06);
     }
     .order-card-head.st-placed { background: #eaf1fb; color: #0a58ca; }
+    .order-card-head.st-waiting   { background: #e7f0ff; color: #0a58ca; }
+    .order-card-head.st-preparing { background: #fff8e1; color: #b45309; }
     .order-card-head.st-served { background: #e6f4ea; color: #198754; }
     .order-card-head.st-cancelled { background: #fbeaec; color: #b02a37; }
     .order-label { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.15rem; }
@@ -89,6 +91,6 @@
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/customer/status.js?v=6"></script>
+  <script type="module" src="/customer/status.js?v=7"></script>
 </body>
 </html>

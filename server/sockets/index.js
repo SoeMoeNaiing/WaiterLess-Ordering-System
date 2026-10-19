@@ -55,7 +55,6 @@ export function attachSocketIO(httpServer, { db }) {
     const adminPayload = adminTok ? verifyToken(adminTok) : null;
     if (adminPayload && adminPayload.scope === 'admin') {
       socket.data.scope = 'admin';
-      socket.data.table = null;
       return next();
     }
 
@@ -65,7 +64,10 @@ export function attachSocketIO(httpServer, { db }) {
       return next();
     }
 
-    return next(new Error('unauthorized'));
+    // Anonymous — allowed for customer status page. Can only join order-N rooms
+    // (read-only update notifications; actual order data is token-gated at HTTP).
+    socket.data.scope = 'anonymous';
+    return next();
   });
 
   io.on('connection', (socket) => {

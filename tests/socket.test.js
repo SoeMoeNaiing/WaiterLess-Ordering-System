@@ -61,10 +61,41 @@ function connectSocket(baseUrl, cookie) {
 
 // ---------- Auth ----------
 
-test('socket rejects connection without auth cookie', { timeout: 5000 }, async () => {
+test('anonymous socket connects with anonymous scope (for customer status)', { timeout: 5000 }, async () => {
   const { httpServer, baseUrl, io } = await startServer();
   try {
-    await assert.rejects(() => connectSocket(baseUrl, ''), /unauthorized/);
+    const { socket, scope } = await connectSocket(baseUrl, '');
+    assert.equal(scope, 'anonymous');
+    socket.close();
+  } finally {
+    await stopServer(httpServer, io);
+  }
+});
+
+test('anonymous socket does NOT join kitchen room', { timeout: 5000 }, async () => {
+  const { httpServer, baseUrl, io } = await startServer();
+  try {
+    const { socket } = await connectSocket(baseUrl, '');
+    await new Promise((r) => setTimeout(r, 100));
+    const kitchenRoom = io.sockets.adapter.rooms.get('kitchen');
+    // Either the room doesn't exist or it has 0 sockets (anonymous didn't join)
+    assert.ok(!kitchenRoom || kitchenRoom.size === 0, 'anonymous must not be in kitchen room');
+    socket.close();
+  } finally {
+    await stopServer(httpServer, io);
+  }
+});
+
+test('anonymous socket can watch a specific order', { timeout: 5000 }, async () => {
+  const { httpServer, baseUrl, io } = await startServer();
+  try {
+    const { socket } = await connectSocket(baseUrl, '');
+    socket.emit('watch:order', { orderId: 42 });
+    await new Promise((r) => setTimeout(r, 100));
+    const room = io.sockets.adapter.rooms.get('order-42');
+    assert.ok(room, 'order-42 room should exist');
+    assert.equal(room.size, 1, 'anonymous socket should be in order-42 room');
+    socket.close();
   } finally {
     await stopServer(httpServer, io);
   }
