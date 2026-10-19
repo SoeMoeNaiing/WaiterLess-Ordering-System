@@ -20,6 +20,7 @@ function validateItems(db, items) {
   if (!Array.isArray(items) || items.length === 0) {
     return { ok: false, status: 400, error: 'items must be a non-empty array' };
   }
+
   const resolved = [];
   for (const entry of items) {
     if (!entry || typeof entry !== 'object') {
@@ -33,13 +34,16 @@ function validateItems(db, items) {
       return { ok: false, status: 400, error: 'qty must be between 1 and 99' };
     }
 
-    const row = db.prepare(
-      `SELECT mi.id, mi.name, mi.price, mi.is_active, mi.is_available,
-              mi.category_id, c.is_active AS cat_active
-         FROM menu_items mi
-         LEFT JOIN categories c ON c.id = mi.category_id
-        WHERE mi.id = ?`
-    ).get(itemId);
+    const row = db
+      .prepare(
+        `SELECT mi.id, mi.name, mi.price, mi.is_active, mi.is_available,
+                mi.category_id, c.is_active AS cat_active
+           FROM menu_items mi
+           LEFT JOIN categories c ON c.id = mi.category_id
+          WHERE mi.id = ?`
+      )
+      .get(itemId);
+
     if (!row) return { ok: false, status: 400, error: `item ${itemId} not found` };
     if (!row.is_active) return { ok: false, status: 400, error: `item ${itemId} is not available` };
     if (row.category_id != null && !row.cat_active) {
@@ -47,7 +51,7 @@ function validateItems(db, items) {
     }
     if (!row.is_available) return { ok: false, status: 400, error: `item ${itemId} is sold out` };
 
-    // Validate selections against this item's option groups
+    // Validate option selections against this item's groups
     const groups = db.prepare(
       'SELECT * FROM menu_item_option_groups WHERE menu_item_id = ? ORDER BY sort_order, id'
     ).all(itemId);
@@ -61,30 +65,29 @@ function validateItems(db, items) {
     }
 
     const incoming = Array.isArray(selections) ? selections : [];
-    const groupedSelections = new Map(); // group_id -> [choice_id]
+    const groupedSelections = new Map();
     for (const sel of incoming) {
       if (!sel || typeof sel !== 'object') {
         return { ok: false, status: 400, error: `item ${itemId}: selection must be an object` };
       }
       if (!Number.isInteger(sel.group_id) || !groupsById.has(sel.group_id)) {
-        return { ok: false, status: 400, error: `item ${itemId}: invalid group_id ${sel.group_id}` };
+        return { ok: false, status: 400, error: `item ${itemId}: invalid group_id` };
       }
       if (!Number.isInteger(sel.choice_id)) {
         return { ok: false, status: 400, error: `item ${itemId}: invalid choice_id` };
       }
       const validChoices = choicesByGroup.get(sel.group_id) || [];
       if (!validChoices.find((c) => c.id === sel.choice_id)) {
-        return { ok: false, status: 400, error: `item ${itemId}: choice ${sel.choice_id} does not belong to group ${sel.group_id}` };
+        return { ok: false, status: 400, error: `item ${itemId}: choice doesn't belong to group` };
       }
       if (!groupedSelections.has(sel.group_id)) groupedSelections.set(sel.group_id, []);
       const arr = groupedSelections.get(sel.group_id);
       if (arr.includes(sel.choice_id)) {
-        return { ok: false, status: 400, error: `item ${itemId}: duplicate choice ${sel.choice_id}` };
+        return { ok: false, status: 400, error: `item ${itemId}: duplicate choice` };
       }
       arr.push(sel.choice_id);
     }
 
-    // Enforce required + single-choice rules
     for (const g of groups) {
       const picked = groupedSelections.get(g.id) || [];
       if (g.is_required && picked.length === 0) {
@@ -95,17 +98,13 @@ function validateItems(db, items) {
       }
     }
 
-    // Flatten with snapshots for storage
     const snapshotSelections = [];
     for (const [groupId, choiceIds] of groupedSelections) {
       const g = groupsById.get(groupId);
       const validChoices = choicesByGroup.get(groupId) || [];
       for (const cid of choiceIds) {
         const c = validChoices.find((x) => x.id === cid);
-        snapshotSelections.push({
-          group_name: g.name,
-          choice_name: c.name,
-        });
+        snapshotSelections.push({ group_name: g.name, choice_name: c.name });
       }
     }
 
@@ -125,7 +124,7 @@ function validateItems(db, items) {
   return { ok: true, resolved };
 }
 
-export function customerRouter({ db }) {
+export function customerRouter({ db, orderRateLimit }) {
   const router = Router();
 
   router.get('/t/:token', (req, res) => {
@@ -205,7 +204,6 @@ export function customerRouter({ db }) {
       };
     };
 
-    for (const cat of byCategory.keys ? byCategory : []) {} // no-op safety
     for (const arr of byCategory.values()) {
       for (let i = 0; i < arr.length; i++) arr[i] = enrichItem(arr[i]);
     }
@@ -238,13 +236,27 @@ export function customerRouter({ db }) {
     if (error === 'inactive') return res.status(410).json({ error: 'table inactive' });
     if (error) return res.status(400).json({ error: 'token is required' });
 
+    // Rate limit: max 10 orders per table per 5 minutes
+    if (orderRateLimit) {
+      const check = orderRateLimit.check(table.id);
+      if (!check.allowed) {
+        res.setHeader('Retry-After', String(check.retryAfterSec));
+        return res.status(429).json({
+          error: 'too many orders from this table — please wait a moment',
+          retry_after: check.retryAfterSec,
+        });
+      }
+    }
+
     const checked = validateItems(db, items);
     if (!checked.ok) return res.status(checked.status).json({ error: checked.error });
 
     const { resolved } = checked;
     const total = resolved.reduce((sum, r) => sum + r.price * r.qty, 0);
+
     const cleanNotes = typeof notes === 'string' && notes.trim() !== ''
-      ? notes.trim().slice(0, 500) : null;
+      ? notes.trim().slice(0, 500)
+      : null;
 
     let orderId;
     try {
@@ -252,7 +264,9 @@ export function customerRouter({ db }) {
         const orderResult = db.prepare(
           'INSERT INTO orders (table_id, total, notes) VALUES (?, ?, ?)'
         ).run(table.id, total, cleanNotes);
+
         const oid = orderResult.lastInsertRowid;
+
         const insertItem = db.prepare(
           `INSERT INTO order_items
              (order_id, menu_item_id, name_snapshot, price_snapshot, qty, notes)
@@ -263,6 +277,7 @@ export function customerRouter({ db }) {
              (order_item_id, group_name_snapshot, choice_name_snapshot)
            VALUES (?, ?, ?)`
         );
+
         for (const r of resolved) {
           const result = insertItem.run(oid, r.itemId, r.name, r.price, r.qty, r.notes);
           const orderItemId = result.lastInsertRowid;
@@ -272,6 +287,7 @@ export function customerRouter({ db }) {
         }
         return oid;
       });
+
       orderId = insert();
     } catch (err) {
       console.error('[customer.orders] insert error:', err);
@@ -284,6 +300,8 @@ export function customerRouter({ db }) {
       .all(orderId);
 
     db.prepare('UPDATE tables SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?').run(table.id);
+
+    if (orderRateLimit) orderRateLimit.record(table.id);
 
     const io = getIO();
     if (io) {
@@ -348,6 +366,9 @@ export function customerRouter({ db }) {
     const items = db
       .prepare('SELECT id, name_snapshot, price_snapshot, qty, notes FROM order_items WHERE order_id = ? ORDER BY id')
       .all(order.id);
+    const optionsStmt = db.prepare(
+      'SELECT group_name_snapshot, choice_name_snapshot FROM order_item_options WHERE order_item_id = ?'
+    );
 
     res.json({
       order: {
@@ -358,7 +379,7 @@ export function customerRouter({ db }) {
         created_at: order.created_at,
         updated_at: order.updated_at,
       },
-      items,
+      items: items.map((it) => ({ ...it, options: optionsStmt.all(it.id) })),
     });
   });
 

@@ -670,3 +670,54 @@ test('kitchen API returns per-item notes', async () => {
   assert.equal(res.body[0].items[0].notes, 'extra cheese');
   db.close();
 });
+
+// ---------- Order rate limit ----------
+
+test('11th order within 5 min returns 429', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'X', price: 1 });
+
+  // Place 10 orders (the limit)
+  for (let i = 0; i < 10; i++) {
+    const res = await request(app).post('/api/customer/orders').send({
+      token: t.qr_token,
+      items: [{ itemId: item.id, qty: 1 }],
+    });
+    assert.equal(res.status, 201, `order ${i + 1} should succeed`);
+  }
+
+  // 11th should be rejected
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token,
+    items: [{ itemId: item.id, qty: 1 }],
+  });
+  assert.equal(res.status, 429);
+  assert.match(res.body.error, /too many orders/);
+  assert.ok(res.body.retry_after > 0);
+  assert.ok(res.headers['retry-after']);
+  db.close();
+});
+
+test('rate limit is per-table, not global', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t1 = await makeTable(agent, { table_number: 'T1' });
+  const t2 = await makeTable(agent, { table_number: 'T2' });
+  const item = await seedMenuItem(agent, { name: 'X', price: 1 });
+
+  // Exhaust T1's budget
+  for (let i = 0; i < 10; i++) {
+    await request(app).post('/api/customer/orders').send({
+      token: t1.qr_token,
+      items: [{ itemId: item.id, qty: 1 }],
+    });
+  }
+
+  // T2 should still be able to order
+  const res = await request(app).post('/api/customer/orders').send({
+    token: t2.qr_token,
+    items: [{ itemId: item.id, qty: 1 }],
+  });
+  assert.equal(res.status, 201);
+  db.close();
+});
