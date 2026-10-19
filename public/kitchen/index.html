@@ -163,13 +163,47 @@
       padding-left: 2.5rem;
       font-style: italic;
     }
+
+    .live-dot {
+      display: inline-block;
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #666;
+      margin-left: 0.4rem;
+      vertical-align: middle;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .live-dot.live { background: #198754; box-shadow: 0 0 6px #198754; }
+    .live-dot.polling { background: #ffc107; }
+
+    .audio-banner {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: linear-gradient(90deg, #ffc107, #ff9800);
+      color: #000;
+      padding: 0.75rem 1rem;
+      text-align: center;
+      font-weight: 600;
+      z-index: 9000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      animation: banner-pulse 1.5s ease-in-out infinite;
+    }
+    .audio-banner-icon { font-size: 1.2rem; }
+    @keyframes banner-pulse {
+      0%, 100% { background: linear-gradient(90deg, #ffc107, #ff9800); }
+      50% { background: linear-gradient(90deg, #ff9800, #ffc107); }
+    }
 </style>
 </head>
 <body>
 
   <!-- Login view -->
   <section id="login-view">
-    <h1>Kitchen</h1>
+    <h1>Kitchen <span class="live-dot" id="live-dot" title="Connecting…"></span></h1>
     <p>Enter the kitchen PIN</p>
     <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" />
     <button id="pin-submit">Log in</button>
@@ -189,6 +223,11 @@
     </div>
   </section>
 
-  <script src="/kitchen/kitchen.js?v=7"></script>
+    <div id="audio-banner" class="audio-banner" style="display:none;">
+    <span class="audio-banner-icon">🔔</span>
+    <span>Tap anywhere to enable order sounds</span>
+  </div>
+
+<script type="module" src="/kitchen/kitchen.js?v=9"></script>
 </body>
 </html>

@@ -1,3 +1,5 @@
+import { io } from '/socket.io/socket.io.esm.min.js';
+
 const $ = (id) => document.getElementById(id);
 
 function el(tag, attrs = {}, children = []) {
@@ -77,10 +79,86 @@ function beep(freq, duration, delay = 0) {
   osc.stop(start + duration + 0.05);
 }
 
+function isAudioReady() {
+  return audioCtx && audioCtx.state === 'running';
+}
+
 function playNewOrderSound() {
   if (!soundEnabled) return;
+  // Silently skip if the browser hasn't unlocked audio yet (no gesture)
+  if (!isAudioReady()) return;
   beep(880, 0.18, 0);
   beep(1100, 0.18, 0.20);
+}
+
+// ---------- Socket ----------
+
+let socket = null;
+
+function updateLiveDot(state) {
+  const dot = $('live-dot');
+  if (!dot) return;
+  dot.classList.remove('live', 'polling');
+  if (state === 'live') {
+    dot.classList.add('live');
+    dot.title = 'Live (Socket.IO connected)';
+  } else if (state === 'polling') {
+    dot.classList.add('polling');
+    dot.title = 'Polling fallback (socket disconnected)';
+  } else {
+    dot.title = 'Connecting…';
+  }
+}
+
+function connectSocket() {
+  if (socket) return;
+
+  socket = io({
+    path: '/socket.io/',
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+  });
+
+  socket.on('connected', (data) => {
+    console.log('[kitchen socket] connected, scope:', data?.scope);
+    updateLiveDot('live');
+    // Sync immediately in case we missed events while disconnected
+    refresh();
+  });
+
+  socket.on('order:new', (payload) => {
+    console.log('[kitchen socket] order:new', payload?.order?.id);
+    refresh();
+  });
+
+  socket.on('order:updated', (payload) => {
+    console.log('[kitchen socket] order:updated', payload?.order?.id || payload?.orderId);
+    refresh();
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('[kitchen socket] disconnected:', reason);
+    updateLiveDot('polling');
+  });
+
+  socket.on('connect_error', (err) => {
+    console.warn('[kitchen socket] connect_error:', err.message);
+    updateLiveDot('polling');
+  });
+
+  socket.io.on('reconnect', () => {
+    console.log('[kitchen socket] reconnected');
+    updateLiveDot('live');
+    refresh();
+  });
+}
+
+function disconnectSocket() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+  updateLiveDot('polling');
 }
 
 // ---------- Auth ----------
@@ -116,12 +194,19 @@ async function login() {
     return;
   }
   showApp();
+  ensureAudio();
+  if (soundEnabled) beep(880, 0.15, 0);
+  setTimeout(() => {
+    if (isAudioReady()) hideAudioBanner();
+  }, 100);
+  connectSocket();
   refresh();
   startPolling();
 }
 
 async function logout() {
   await fetch('/api/kitchen/auth/logout', { method: 'POST' });
+  disconnectSocket();
   stopPolling();
   showLogin();
 }
@@ -136,6 +221,7 @@ async function patchOrder(id, payload) {
   });
   if (res.status === 401) {
     stopPolling();
+    disconnectSocket();
     showLogin();
     return null;
   }
@@ -229,13 +315,14 @@ async function refresh() {
     const res = await fetch('/api/kitchen/orders');
     if (res.status === 401) {
       stopPolling();
+      disconnectSocket();
       showLogin();
       return;
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const orders = await res.json();
 
-    // Detect new orders via composite key (survives server restart)
+    // New-order detection via composite key
     const newKeys = new Set();
     if (seenOrderKeysInitialized) {
       for (const o of orders) {
@@ -262,12 +349,13 @@ async function refresh() {
   }
 }
 
-// ---------- Polling ----------
+// ---------- Polling (safety net — socket is primary) ----------
 
 let pollTimer = null;
 function startPolling() {
   if (pollTimer) return;
-  pollTimer = setInterval(refresh, 5000);
+  // 30s safety net in case socket drops silently
+  pollTimer = setInterval(refresh, 30000);
 }
 function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
@@ -280,11 +368,30 @@ $('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') login
 $('logout-btn').onclick = logout;
 
 $('sound-btn')?.addEventListener('click', toggleSound);
-// Pre-warm audio on first user gesture (browsers require a gesture to play audio)
-document.addEventListener('click', ensureAudio, { once: true });
-document.addEventListener('keydown', ensureAudio, { once: true });
+function showAudioBanner() {
+  const banner = document.getElementById('audio-banner');
+  if (banner) banner.style.display = 'flex';
+}
 
-// Keyboard: M toggles sound
+function hideAudioBanner() {
+  const banner = document.getElementById('audio-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function unlockAudioAndHideBanner() {
+  ensureAudio();
+  // Give the context a moment to transition to running, then hide
+  setTimeout(() => {
+    if (isAudioReady()) {
+      hideAudioBanner();
+    }
+  }, 100);
+}
+
+document.addEventListener('click', unlockAudioAndHideBanner, { once: true });
+document.addEventListener('keydown', unlockAudioAndHideBanner, { once: true });
+document.addEventListener('touchstart', unlockAudioAndHideBanner, { once: true });
+
 document.addEventListener('keydown', (e) => {
   if (e.target.matches('input, textarea, select')) return;
   if (e.key === 'm' || e.key === 'M') {
@@ -294,6 +401,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 updateSoundButton();
+updateLiveDot('polling');
 
 async function boot() {
   updateSoundButton();
@@ -301,8 +409,10 @@ async function boot() {
   const res = await fetch('/api/kitchen/orders');
   if (res.ok) {
     showApp();
+    connectSocket();
     refresh();
     startPolling();
+    if (soundEnabled && !isAudioReady()) showAudioBanner();
   } else {
     showLogin();
   }
