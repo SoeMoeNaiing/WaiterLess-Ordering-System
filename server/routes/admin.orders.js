@@ -45,10 +45,13 @@ export function adminOrdersRouter({ db }) {
     ).all(...params, limit, offset);
 
     const itemsStmt = db.prepare(
-      `SELECT name_snapshot, price_snapshot, qty
+      `SELECT id, name_snapshot, price_snapshot, qty, notes
          FROM order_items
         WHERE order_id = ?
         ORDER BY id`
+    );
+    const optionsStmt = db.prepare(
+      'SELECT group_name_snapshot, choice_name_snapshot FROM order_item_options WHERE order_item_id = ?'
     );
 
     res.json({
@@ -56,7 +59,13 @@ export function adminOrdersRouter({ db }) {
       total_sum: totalRow.sum,
       limit,
       offset,
-      orders: orders.map((o) => ({ ...o, items: itemsStmt.all(o.id) })),
+      orders: orders.map((o) => ({
+        ...o,
+        items: itemsStmt.all(o.id).map((it) => ({
+          ...it,
+          options: optionsStmt.all(it.id),
+        })),
+      })),
     });
   });
 

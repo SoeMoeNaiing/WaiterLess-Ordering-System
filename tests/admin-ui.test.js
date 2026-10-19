@@ -118,3 +118,30 @@ test('invalid JSON body returns 400', async () => {
   assert.equal(res.status, 400);
   assert.equal(res.body.error, 'invalid JSON body');
 });
+
+// ---------- 404 + error handler (from B1) ----------
+
+test('GET /api/nope returns JSON 404', async () => {
+  const app = createApp();
+  const res = await request(app).get('/api/nope');
+  assert.equal(res.status, 404);
+  assert.equal(res.body.error, 'endpoint not found');
+  assert.equal(res.body.path, '/api/nope');
+});
+
+test('GET /nope returns text 404', async () => {
+  const app = createApp();
+  const res = await request(app).get('/nope');
+  assert.equal(res.status, 404);
+  assert.match(res.text, /Not found/);
+});
+
+test('invalid JSON body returns 400', async () => {
+  const app = createApp();
+  const res = await request(app)
+    .post('/api/admin/auth/login')
+    .set('Content-Type', 'application/json')
+    .send('{not json');
+  assert.equal(res.status, 400);
+  assert.equal(res.body.error, 'invalid JSON body');
+});
