@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getIO } from '../sockets/registry.js';
 
 const ACTIVE_STATUSES = ['placed', 'preparing', 'ready'];
 const ALL_STATUSES = ['placed', 'preparing', 'ready', 'served', 'cancelled'];
@@ -21,7 +22,12 @@ function orderWithItems(db, orderId) {
       ORDER BY id`
   ).all(orderId);
 
-  return { ...order, items };
+  const optionsStmt = db.prepare(
+    'SELECT group_name_snapshot, choice_name_snapshot FROM order_item_options WHERE order_item_id = ?'
+  );
+  const enriched = items.map((it) => ({ ...it, options: optionsStmt.all(it.id) }));
+
+  return { ...order, items: enriched };
 }
 
 export function kitchenRouter({ db }) {
@@ -54,21 +60,19 @@ export function kitchenRouter({ db }) {
         WHERE order_id = ?
         ORDER BY id`
     );
-
-    // Attach options (snapshot data) to each item
     const optionsStmt = db.prepare(
       'SELECT group_name_snapshot, choice_name_snapshot FROM order_item_options WHERE order_item_id = ?'
     );
 
-    const enrichOrder = (o) => {
+    const enriched = orders.map((o) => {
       const items = itemsStmt.all(o.id).map((it) => ({
         ...it,
         options: optionsStmt.all(it.id),
       }));
       return { ...o, items };
-    };
+    });
 
-    res.json(orders.map(enrichOrder));
+    res.json(enriched);
   });
 
   // PATCH /api/kitchen/orders/:id — update status and/or notes
@@ -115,6 +119,13 @@ export function kitchenRouter({ db }) {
     ).run(...values, id);
 
     const updated = orderWithItems(db, id);
+
+    const ioInstance = getIO();
+    if (ioInstance) {
+      ioInstance.to('kitchen').emit('order:updated', { order: updated });
+      ioInstance.to(`order-${id}`).emit('order:updated', { orderId: id });
+    }
+
     res.json(updated);
   });
 

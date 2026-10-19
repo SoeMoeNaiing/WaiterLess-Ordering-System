@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getIO } from '../sockets/registry.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', '..', 'public', 'customer');
@@ -283,6 +284,12 @@ export function customerRouter({ db }) {
       .all(orderId);
 
     db.prepare('UPDATE tables SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?').run(table.id);
+
+    const io = getIO();
+    if (io) {
+      io.to('kitchen').emit('order:new', { order, items: orderItems });
+      io.to(`order-${orderId}`).emit('order:updated', { orderId });
+    }
 
     res.status(201).json({ order, items: orderItems });
   });

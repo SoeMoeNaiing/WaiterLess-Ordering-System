@@ -19,7 +19,7 @@ import { kitchenRouter } from './routes/kitchen.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
-export function createApp({ db } = {}) {
+export function createApp({ db, io } = {}) {
   const app = express();
   const rateLimit = createRateLimiter();
 
