@@ -17,6 +17,8 @@ import { adminDashboardRouter } from './routes/admin.dashboard.js';
 import { publicSettingsRouter } from './routes/public.settings.js';
 import { customerRouter } from './routes/customer.js';
 import { kitchenRouter } from './routes/kitchen.js';
+import { requestLog } from './middleware/requestLog.js';
+import { getIO } from './sockets/registry.js';
 
 const LAN_PREFIX = process.env.LAN_PREFIX || '192.168.';
 
@@ -27,6 +29,7 @@ export function createApp({ db } = {}) {
 
   app.use(express.json({ limit: '100kb' }));
   app.use(lanOnly(LAN_PREFIX));
+  app.use(requestLog);
 
   // Static assets
   app.use('/uploads', express.static('uploads'));
@@ -38,15 +41,39 @@ export function createApp({ db } = {}) {
   app.get('/', (req, res) => res.redirect('/admin/'));
 
   app.get('/health', (req, res) => {
+    let dbStatus = 'unavailable';
+    let tables = null;
+    let activeOrders = null;
+
     if (db) {
-      try { db.prepare('SELECT 1').get(); }
-      catch {
-        return res.status(500).json({ ok: false, db: 'error', time: new Date().toISOString() });
+      try {
+        db.prepare('SELECT 1').get();
+        dbStatus = 'connected';
+        tables = db.prepare('SELECT COUNT(*) AS c FROM tables WHERE is_active = 1').get().c;
+        activeOrders = db.prepare(
+          "SELECT COUNT(*) AS c FROM orders WHERE status IN ('placed','preparing','ready')"
+        ).get().c;
+      } catch {
+        return res.status(500).json({
+          ok: false, db: 'error', time: new Date().toISOString(),
+        });
       }
     }
+
+    let sockets = 0;
+    try {
+      const io = getIO();
+      if (io) sockets = io.sockets.sockets.size;
+    } catch {}
+
     res.json({
       ok: true,
-      db: db ? 'connected' : 'unavailable',
+      db: dbStatus,
+      uptime_sec: Math.floor(process.uptime()),
+      memory_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      sockets,
+      tables,
+      active_orders: activeOrders,
       time: new Date().toISOString(),
     });
   });
