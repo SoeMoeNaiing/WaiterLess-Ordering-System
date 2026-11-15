@@ -97,5 +97,7 @@
   "busy.title": "Table already in use",
   "busy.body": "Someone at {table} has already ordered recently. If you're at this table, tap Continue. If you scanned the wrong code, tap Back.",
   "busy.continue": "Yes, I'm at this table",
-  "busy.back": "Back"
+  "busy.back": "Back",
+  "status.waiting": "Waiting for confirmation",
+  "status.waiting_hint": "Your order has been received"
 }

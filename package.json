@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node --test --test-concurrency=1",
-    "backup": "node scripts/backup.js"
+    "backup": "node scripts/backup.js",
+    "seed": "node scripts/seed.js"
   },
   "engines": {
     "node": ">=20.0.0"
