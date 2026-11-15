@@ -128,45 +128,85 @@ async function refresh() {
   const tables = await api('/api/admin/tables');
   const root = $('tables');
   if (!root) return;
+
+  // Preserve checkbox selections across refresh
+  const previouslySelected = new Set(
+    Array.from(document.querySelectorAll('.table-checkbox:checked')).map((c) => c.dataset.tableId)
+  );
+  for (const tbl of tables) {
+    tbl._selected = previouslySelected.has(String(tbl.id));
+  }
+
+  const countEl = $('tables-count');
+  if (countEl) {
+    const active = tables.filter((t) => t.is_active).length;
+    const inactive = tables.length - active;
+    countEl.textContent = inactive > 0
+      ? `${active} active · ${inactive} inactive`
+      : `${active} table${active === 1 ? '' : 's'}`;
+  }
+
   root.replaceChildren();
 
   if (tables.length === 0) {
-    root.appendChild(el('p', { className: 'muted', text: 'No tables yet. Add one above.' }));
+    root.innerHTML = '';
+    const empty = el('p', { className: 'muted', text: 'No tables yet. Add one above.' });
+    empty.style.gridColumn = '1 / -1';
+    empty.style.textAlign = 'center';
+    empty.style.padding = 'var(--space-8) var(--space-4)';
+    root.appendChild(empty);
     updatePrintSelectedButton();
     return;
   }
+
   for (const tbl of tables) root.appendChild(renderTable(tbl));
   updatePrintSelectedButton();
 }
 
 function renderTable(tbl) {
-  const checkbox = el('input', { type: 'checkbox', className: 'row-check', 'data-table-id': String(tbl.id) });
-  checkbox.addEventListener('change', updatePrintSelectedButton);
+  const isSelected = tbl._selected || false;
 
-  const img = el('img', {
-    src: `/api/admin/tables/${tbl.id}/qr.png?size=192&v=${encodeURIComponent(tbl.qr_token)}`,
-    alt: `QR for ${tbl.table_number}`,
+  const checkbox = el('input', {
+    type: 'checkbox',
+    className: 'table-checkbox',
+    'data-table-id': String(tbl.id),
+    checked: isSelected,
+  });
+  checkbox.addEventListener('change', (e) => {
+    tbl._selected = e.target.checked;
+    const card = checkbox.closest('.table-card');
+    if (card) card.classList.toggle('is-selected', e.target.checked);
+    updatePrintSelectedButton();
+  });
+
+  const activeBadge = el('span', {
+    className: `badge ${tbl.is_active ? 'badge-active' : 'badge-inactive'}`,
+    text: tbl.is_active ? 'Active' : 'Inactive',
   });
 
   const orderBadge = tbl.active_orders_count > 0
-    ? el('span', { className: 'badge warn', text: `${tbl.active_orders_count} active` })
-    : el('span', { className: 'badge idle', text: 'idle' });
+    ? el('span', { className: 'badge badge-busy', text: `${tbl.active_orders_count} active` })
+    : el('span', { className: 'badge badge-idle', text: 'Idle' });
 
-  const info = el('div', { className: 'info' }, [
-    el('div', { className: 'num' }, [
-      tbl.table_number,
-      el('span', {
-        className: `badge ${tbl.is_active ? 'on' : 'off'}`,
-        text: tbl.is_active ? 'active' : 'inactive',
-      }),
-      orderBadge,
-    ]),
-    tbl.label ? el('div', { className: 'label', text: tbl.label }) : null,
-    el('div', { className: 'token', text: tbl.qr_token }),
+  const titleBlock = el('div', { className: 'table-card-title' }, [
+    el('div', { className: 'table-number' }, [tbl.table_number]),
+    tbl.label ? el('div', { className: 'table-label', text: tbl.label }) : null,
+    el('div', { className: 'table-badges' }, [activeBadge, orderBadge]),
   ]);
 
-  const rename = el('button', {
-    text: 'Rename',
+  const head = el('div', { className: 'table-card-head' }, [checkbox, titleBlock]);
+
+  const img = el('img', {
+    className: 'table-qr',
+    src: `/api/admin/tables/${tbl.id}/qr.png?size=280&v=${encodeURIComponent(tbl.qr_token)}`,
+    alt: `QR for ${tbl.table_number}`,
+  });
+  const qrWrap = el('div', { className: 'table-qr-wrap' }, [img]);
+
+  const token = el('div', { className: 'table-token', text: tbl.qr_token, title: tbl.qr_token });
+
+  const renameBtn = el('button', {
+    className: 'btn',
     onclick: async () => {
       const newNum = prompt(`New table number for ${tbl.table_number}:`, tbl.table_number);
       if (newNum === null) return;
@@ -187,12 +227,14 @@ function renderTable(tbl) {
         toast(e.message, 'error');
       }
     },
-  });
+  }, [
+    document.createTextNode('Rename'),
+  ]);
 
-  const regen = el('button', {
-    text: t('admin.regenerate_qr'),
+  const regenBtn = el('button', {
+    className: 'btn',
     onclick: async () => {
-      if (!confirm(`Regenerate QR for ${tbl.table_number}?`)) return;
+      if (!confirm(`Regenerate QR for ${tbl.table_number}? The old QR code will stop working.`)) return;
       try {
         await api(`/api/admin/tables/${tbl.id}/regenerate-token`, { method: 'POST' });
         toast('QR regenerated', 'success');
@@ -207,11 +249,12 @@ function renderTable(tbl) {
         }
       }
     },
-  });
+  }, [
+    document.createTextNode('Regen'),
+  ]);
 
-  const toggle = el('button', {
-    text: t(tbl.is_active ? 'admin.deactivate' : 'admin.reactivate'),
-    className: tbl.is_active ? 'danger' : '',
+  const toggleBtn = el('button', {
+    className: `btn ${tbl.is_active ? 'btn-danger' : ''}`,
     onclick: async () => {
       if (tbl.is_active && !confirm(`Deactivate ${tbl.table_number}?`)) return;
       try {
@@ -221,14 +264,19 @@ function renderTable(tbl) {
         });
         toast(tbl.is_active ? 'Table deactivated' : 'Table reactivated', 'success');
         await refresh();
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message === 'unauthorized') return;
+        toast(e.message, 'error');
+      }
     },
-  });
+  }, [
+    document.createTextNode(tbl.is_active ? 'Deactivate' : 'Reactivate'),
+  ]);
 
-  const clear = el('button', {
-    text: t('admin.clear_session'),
+  const clearBtn = el('button', {
+    className: 'btn btn-full',
     onclick: async () => {
-      if (!confirm(`Clear session for ${tbl.table_number}?`)) return;
+      if (!confirm(`Clear session for ${tbl.table_number}? Customer will no longer see previous orders.`)) return;
       try {
         const res = await api(`/api/admin/tables/${tbl.id}/clear-session`, { method: 'POST' });
         if (res.in_progress_count > 0) {
@@ -247,28 +295,34 @@ function renderTable(tbl) {
         }
       }
     },
-  });
-
-  return el('div', { className: 'row' }, [
-    checkbox, img, info,
-    el('div', { className: 'actions' }, [rename, regen, toggle, clear]),
+  }, [
+    document.createTextNode('Clear session'),
   ]);
+
+  const actions = el('div', { className: 'table-actions' }, [
+    renameBtn, regenBtn, toggleBtn, clearBtn,
+  ]);
+
+  return el('div', {
+    className: `table-card${isSelected ? ' is-selected' : ''}${!tbl.is_active ? ' is-inactive' : ''}`,
+  }, [head, qrWrap, token, actions]);
 }
 
 function getSelectedTableIds() {
-  return Array.from(document.querySelectorAll('.row-check:checked'))
+  return Array.from(document.querySelectorAll('.table-checkbox:checked'))
     .map((c) => c.dataset.tableId);
 }
 
 function updatePrintSelectedButton() {
   const btn = $('print-selected');
+  const label = $('print-selected-label');
   if (!btn) return;
   const ids = getSelectedTableIds();
   if (ids.length === 0) {
     btn.style.display = 'none';
   } else {
-    btn.style.display = 'inline-block';
-    btn.textContent = `Print selected (${ids.length})`;
+    btn.style.display = 'inline-flex';
+    if (label) label.textContent = `Print selected (${ids.length})`;
   }
 }
 
