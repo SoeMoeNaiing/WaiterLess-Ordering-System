@@ -468,22 +468,40 @@ async function refreshMenuItems() {
   if (!root) return;
   root.replaceChildren();
 
+  const countEl = $('menu-items-count');
+  if (countEl) {
+    countEl.textContent = items.length === 0
+      ? 'No items yet'
+      : `${items.length} item${items.length === 1 ? '' : 's'}`;
+  }
+
   if (items.length === 0) {
-    root.appendChild(el('p', { className: 'muted', text: 'No menu items yet.' }));
+    const empty = el('p', {
+      className: 'muted',
+      text: 'No menu items yet. Add one above.',
+      style: 'text-align: center; padding: var(--space-5) 0; margin: 0;',
+    });
+    root.appendChild(empty);
     return;
   }
   for (const item of items) root.appendChild(renderMenuItem(item, cats));
 }
 
 function renderMenuItem(item, cats) {
+  // Thumbnail
   const img = el('img', {
-    className: 'thumb',
+    className: 'menu-item-thumb',
     src: item.image_path || '/admin/placeholder.svg',
     alt: item.name,
     onerror: (e) => { e.target.src = '/admin/placeholder.svg'; },
   });
 
-  const upload = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', style: 'display:none;' });
+  // Hidden file input + Image button
+  const upload = el('input', {
+    type: 'file',
+    accept: 'image/png,image/jpeg,image/webp',
+    style: 'display: none;',
+  });
   upload.onchange = async () => {
     const f = upload.files[0];
     if (!f) return;
@@ -495,22 +513,67 @@ function renderMenuItem(item, cats) {
         if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
         return r.json();
       });
-      await api(`/api/admin/menu-items/${item.id}`, { method: 'PUT', body: JSON.stringify({ image_path: up.path }) });
+      await api(`/api/admin/menu-items/${item.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ image_path: up.path }),
+      });
       toast('Image updated', 'success');
       await refreshMenuItems();
-    } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+    } catch (e) {
+      if (e.message !== 'unauthorized') toast(e.message, 'error');
+    }
   };
-  const uploadBtn = el('button', { text: 'Image…', onclick: () => upload.click() });
 
-  const name = el('input', { type: 'text', value: item.name, style: 'flex: 1; min-width: 8rem;' });
-  const price = el('input', { type: 'number', step: '0.01', min: '0', value: item.price, style: 'max-width: 6rem;' });
+  // Editable fields
+  const name = el('input', {
+    type: 'text',
+    value: item.name,
+    className: 'input menu-item-name',
+    placeholder: 'Item name',
+  });
 
-  const cat = el('select', {});
+  const price = el('input', {
+    type: 'number',
+    step: '0.01',
+    min: '0',
+    value: item.price,
+    className: 'input menu-item-price',
+    placeholder: 'Price',
+  });
+
+  const cat = el('select', { className: 'input menu-item-cat' });
   cat.appendChild(el('option', { value: '', text: 'Uncategorized' }));
-  for (const c of cats) cat.appendChild(el('option', { value: String(c.id), text: c.name, selected: c.id === item.category_id }));
+  for (const c of cats) {
+    cat.appendChild(el('option', {
+      value: String(c.id),
+      text: c.name,
+      selected: c.id === item.category_id,
+    }));
+  }
 
-  const save = el('button', {
-    text: t('admin.save'),
+  const availBadge = el('span', {
+    className: `badge ${item.is_available ? 'badge-active' : 'badge-inactive'}`,
+    text: item.is_available ? 'Available' : 'Unavailable',
+  });
+
+  const fields = el('div', { className: 'menu-item-fields' }, [
+    el('div', { className: 'menu-item-line' }, [name, price]),
+    el('div', { className: 'menu-item-line' }, [cat, availBadge]),
+  ]);
+
+  // Actions
+  const uploadBtn = el('button', {
+    className: 'btn btn-sm',
+    onclick: () => upload.click(),
+  }, [makeIcon('image'), document.createTextNode('Image')]);
+
+  const customizeBtn = el('button', {
+    className: 'btn btn-sm',
+    onclick: () => openOptionsModal(item.id, item.name),
+  }, [makeIcon('settings'), document.createTextNode('Customize')]);
+
+  const saveBtn = el('button', {
+    className: 'btn btn-sm',
     onclick: async () => {
       try {
         await api(`/api/admin/menu-items/${item.id}`, {
@@ -523,12 +586,14 @@ function renderMenuItem(item, cats) {
         });
         toast('Item saved', 'success');
         await refreshMenuItems();
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message !== 'unauthorized') toast(e.message, 'error');
+      }
     },
-  });
+  }, [makeIcon('check'), document.createTextNode('Save')]);
 
-  const avail = el('button', {
-    text: t(item.is_available ? 'admin.mark_unavailable' : 'admin.mark_available'),
+  const availBtn = el('button', {
+    className: 'btn btn-sm',
     onclick: async () => {
       try {
         await api(`/api/admin/menu-items/${item.id}`, {
@@ -537,37 +602,34 @@ function renderMenuItem(item, cats) {
         });
         toast(item.is_available ? 'Marked unavailable' : 'Marked available', 'success');
         await refreshMenuItems();
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message !== 'unauthorized') toast(e.message, 'error');
+      }
     },
-  });
+  }, [
+    makeIcon(item.is_available ? 'x-circle' : 'check-circle'),
+    document.createTextNode(item.is_available ? 'Unavailable' : 'Available'),
+  ]);
 
-  const del = el('button', {
-    text: t('admin.delete'),
-    className: 'danger',
+  const delBtn = el('button', {
+    className: 'btn btn-sm btn-danger',
     onclick: async () => {
-      if (!confirm(`Delete "${item.name}"?`)) return;
+      if (!confirm(`Delete "${item.name}"? Order history will keep the price.`)) return;
       try {
         await api(`/api/admin/menu-items/${item.id}`, { method: 'DELETE' });
         toast('Item deleted', 'success');
         await refreshMenuItems();
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message !== 'unauthorized') toast(e.message, 'error');
+      }
     },
-  });
+  }, [makeIcon('trash'), document.createTextNode('Delete')]);
 
-  const info = el('div', { className: 'info', style: 'display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;' }, [
-    name, price, cat,
-    el('span', {
-      className: `badge ${item.is_available ? 'on' : 'off'}`,
-      text: item.is_available ? 'available' : 'unavailable',
-    }),
+  const actions = el('div', { className: 'menu-item-actions' }, [
+    uploadBtn, customizeBtn, saveBtn, availBtn, delBtn,
   ]);
 
-  const customize = el('button', {
-    text: 'Customize',
-    onclick: () => openOptionsModal(item.id, item.name),
-  });
-
-  return el('div', { className: 'row' }, [img, info, el('div', { className: 'actions' }, [uploadBtn, customize, save, avail, del]), upload]);
+  return el('div', { className: 'menu-item-row' }, [img, fields, actions, upload]);
 }
 
 $('add-item').onclick = async () => {

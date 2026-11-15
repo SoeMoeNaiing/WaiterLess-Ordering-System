@@ -182,16 +182,24 @@
           <div id="categories" class="categories-list"></div>
         </div>
         <div class="card">
-          <h2>Menu items</h2>
+          <div class="card-head-row">
+            <div>
+              <h2 class="card-title" style="margin-bottom: 4px;">Menu items</h2>
+              <p class="muted" id="menu-items-count" style="margin: 0; font-size: var(--text-xs);">—</p>
+            </div>
+          </div>
           <div class="form-row">
-            <input id="new-item-name" type="text" placeholder="Item name" />
-            <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" style="max-width: 7rem;" />
-            <select id="new-item-category" style="flex: 1; min-width: 8rem;"></select>
-            <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" style="max-width: 12rem;" />
-            <button id="add-item" class="primary">Add</button>
+            <input id="new-item-name" type="text" placeholder="Item name" class="input" />
+            <input id="new-item-price" type="number" step="0.01" min="0" placeholder="Price" class="input" style="max-width: 8rem;" />
+            <select id="new-item-category" class="input" style="flex: 1; min-width: 10rem;"></select>
+            <input id="new-item-image" type="file" accept="image/png,image/jpeg,image/webp" class="input" style="max-width: 14rem;" />
+            <button id="add-item" class="btn btn-primary">
+              <svg class="icon icon-sm"><use href="/shared/icons.svg#plus"/></svg>
+              Add
+            </button>
           </div>
           <p id="add-item-error" class="error"></p>
-          <div id="menu-items"><p class="muted">loading…</p></div>
+          <div id="menu-items" class="menu-items-list"></div>
         </div>
       </section>
 
@@ -295,6 +303,6 @@
   </div>
 
 <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/admin/app.js?v=34"></script>
+  <script type="module" src="/admin/app.js?v=35"></script>
 </body>
 </html>
