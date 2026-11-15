@@ -768,3 +768,30 @@ test('rate limit is per-table, not global', async () => {
   assert.equal(res.status, 201);
   db.close();
 });
+
+// ---------- Receipt page ----------
+
+test('GET /t/:token/receipt/:id serves the receipt HTML', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const res = await request(app).get(`/t/${t.qr_token}/receipt/1`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /^text\/html/);
+  assert.match(res.text, /Receipt/);
+  db.close();
+});
+
+test('GET /t/:token/receipt/:id returns 404 for unknown token', async () => {
+  const { app, db } = await appWithDb();
+  const res = await request(app).get('/t/bogusToken123/receipt/1');
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('GET /t/:token/receipt/:id returns 410 for inactive table', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent, { table_number: 'T1', is_active: 0 });
+  const res = await request(app).get(`/t/${t.qr_token}/receipt/1`);
+  assert.equal(res.status, 410);
+  db.close();
+});

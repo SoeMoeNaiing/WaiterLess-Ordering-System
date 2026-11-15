@@ -143,6 +143,14 @@ export function customerRouter({ db, orderRateLimit }) {
     res.type('html').send(readFileSync(join(PUBLIC_DIR, 'status.html'), 'utf8'));
   });
 
+  router.get('/t/:token/receipt/:id', (req, res) => {
+    const { error } = findTableByToken(db, req.params.token);
+    if (error === 'notfound') return res.status(404).send('Table not found');
+    if (error === 'inactive') return res.status(410).send('This table is no longer active');
+    if (error) return res.status(400).send('Missing token');
+    res.type('html').send(readFileSync(join(PUBLIC_DIR, 'receipt.html'), 'utf8'));
+  });
+
   router.get('/t/:token/order/:id', (req, res) => {
     const { error } = findTableByToken(db, req.params.token);
     if (error === 'notfound') return res.status(404).send('Table not found');

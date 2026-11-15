@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#0a58ca" />
+  <title>Receipt</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --c-text: #111827;
+      --c-text-muted: #6b7280;
+      --c-text-soft: #9ca3af;
+      --c-border: #e5e7eb;
+      --c-border-soft: #f3f4f6;
+      --c-surface: #ffffff;
+      --c-bg: #f3f4f6;
+      --c-primary: #0a58ca;
+      --c-primary-hover: #084298;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --space-6: 32px;
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--c-text);
+      background: var(--c-bg);
+      -webkit-font-smoothing: antialiased;
+      padding: var(--space-4);
+    }
+
+    /* Toolbar (hidden in print) */
+    .toolbar {
+      max-width: 420px;
+      margin: 0 auto var(--space-3);
+      display: flex;
+      gap: var(--space-2);
+    }
+
+    .toolbar a,
+    .toolbar button {
+      flex: 1;
+      font: inherit;
+      font-weight: 600;
+      font-size: 14px;
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--c-border);
+      background: var(--c-surface);
+      color: var(--c-text);
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .toolbar button.primary {
+      background: var(--c-primary);
+      border-color: var(--c-primary);
+      color: #fff;
+    }
+    .toolbar button.primary:hover { background: var(--c-primary-hover); }
+    .toolbar a:hover { background: #f9fafb; }
+
+    /* Receipt card */
+    .receipt {
+      max-width: 420px;
+      margin: 0 auto;
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      padding: var(--space-6) var(--space-5);
+    }
+
+    .restaurant-name {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      margin: 0 0 var(--space-2);
+      letter-spacing: -0.01em;
+    }
+
+    .receipt-label {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--c-text-soft);
+      margin-bottom: var(--space-5);
+    }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--c-text-muted);
+      margin-bottom: var(--space-2);
+    }
+    .meta .label { color: var(--c-text-soft); }
+    .meta .value { color: var(--c-text); font-weight: 500; }
+
+    .divider {
+      border: none;
+      border-top: 1px dashed var(--c-border);
+      margin: var(--space-4) 0;
+    }
+    .divider.solid {
+      border-top: 2px solid var(--c-text);
+      margin: var(--space-3) 0;
+    }
+
+    .items {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .item {
+      padding: var(--space-2) 0;
+    }
+    .item + .item {
+      border-top: 1px dashed var(--c-border-soft);
+    }
+
+    .item-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-3);
+    }
+
+    .item-qty {
+      font-weight: 700;
+      color: var(--c-primary);
+      min-width: 32px;
+    }
+
+    .item-name {
+      flex: 1;
+      font-weight: 500;
+    }
+
+    .item-price {
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      color: var(--c-text);
+      white-space: nowrap;
+    }
+
+    .item-options,
+    .item-note {
+      margin-top: var(--space-1);
+      padding-left: 44px;
+      font-size: 12px;
+      color: var(--c-text-muted);
+      line-height: 1.4;
+    }
+    .item-note {
+      font-style: italic;
+      color: #b45309;
+    }
+
+    .total-block {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: var(--space-3);
+    }
+
+    .total-label {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--c-text-muted);
+    }
+
+    .total-amount {
+      font-size: 22px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--c-text);
+    }
+
+    .payment-note {
+      text-align: center;
+      font-size: 12px;
+      font-style: italic;
+      color: var(--c-text-muted);
+      margin-top: var(--space-4);
+    }
+
+    .thanks {
+      text-align: center;
+      font-size: 13px;
+      color: var(--c-text);
+      font-weight: 500;
+      margin-top: var(--space-3);
+      line-height: 1.5;
+    }
+
+    .order-id-footer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--c-text-soft);
+      font-family: ui-monospace, monospace;
+      margin-top: var(--space-5);
+      letter-spacing: 0.02em;
+    }
+
+    /* Loading / error states */
+    .state {
+      text-align: center;
+      padding: var(--space-6) var(--space-4);
+      color: var(--c-text-muted);
+    }
+    .state .icon {
+      font-size: 32px;
+      margin-bottom: var(--space-3);
+      opacity: 0.4;
+      display: block;
+    }
+    .state.error { color: #b02a37; }
+
+    /* ---------- Print ---------- */
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+        font-size: 13px;
+      }
+      .toolbar { display: none; }
+      .receipt {
+        max-width: none;
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+      }
+      .restaurant-name { font-size: 18px; }
+      .receipt-label { margin-bottom: var(--space-3); }
+      .divider { margin: var(--space-3) 0; }
+      .total-amount { font-size: 18px; }
+      @page {
+        margin: 10mm;
+        size: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar" id="toolbar" style="display:none;">
+    <a id="back-link" href="#" data-i18n="receipt.back">Back to orders</a>
+    <button class="primary" onclick="window.print()" data-i18n="receipt.print">Print / Save PDF</button>
+    <button id="save-image" data-i18n="receipt.save_image">Save as image</button>
+  </div>
+
+  <main class="receipt" id="receipt">
+    <div class="state">
+      <div class="icon">⋯</div>
+      <span data-i18n="receipt.loading">Loading receipt…</span>
+    </div>
+  </main>
+
+  <script type="module" src="/customer/receipt.js?v=3"></script>
+</body>
+</html>

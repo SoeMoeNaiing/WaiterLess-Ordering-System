@@ -58,7 +58,7 @@ function statusInfo(status) {
   }
 }
 
-function renderOrderCard(order) {
+function renderOrderCard(order, token) {
   const info = statusInfo(order.status);
 
   const head = el('div', { className: `order-card-head ${info.cls}` }, [
@@ -86,7 +86,21 @@ function renderOrderCard(order) {
     el('span', { text: formatPrice(order.total) }),
   ]);
 
-  return el('div', { className: 'card order-card' }, [head, meta, list, total]);
+  const parts = [head, meta, list, total];
+
+  if (order.status === 'served') {
+    parts.push(el('div', { className: 'receipt-action' }, [
+      el('a', {
+        className: 'receipt-link',
+        href: `/t/${token}/receipt/${order.id}`,
+        target: '_blank',
+        rel: 'noopener',
+        text: t('receipt.view_button'),
+      }),
+    ]));
+  }
+
+  return el('div', { className: 'card order-card' }, parts);
 }
 
 function render(orders, token) {
@@ -106,7 +120,7 @@ function render(orders, token) {
     }));
   } else {
     const grid = el('div', { className: 'orders-grid' });
-    for (const o of orders) grid.appendChild(renderOrderCard(o));
+    for (const o of orders) grid.appendChild(renderOrderCard(o, token));
     root.appendChild(grid);
   }
 

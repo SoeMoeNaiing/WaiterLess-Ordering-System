@@ -79,7 +79,22 @@
       max-width: 640px; margin: 2rem auto; padding: 1rem;
       background: #fbeaec; color: #721c24; border-radius: 8px; text-align: center;
     }
-  </style>
+  
+    .receipt-action {
+      padding: var(--space-2) var(--space-4) var(--space-3);
+      border-top: 1px solid var(--c-border-soft, #f3f4f6);
+    }
+    .receipt-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--c-primary, #0a58ca);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .receipt-link:hover { text-decoration: underline; }
+</style>
 </head>
 <body>
   <header>
@@ -91,6 +106,6 @@
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/customer/status.js?v=7"></script>
+  <script type="module" src="/customer/status.js?v=9"></script>
 </body>
 </html>
