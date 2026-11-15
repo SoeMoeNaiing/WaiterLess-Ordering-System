@@ -529,26 +529,48 @@ $('add-item').onclick = async () => {
 async function refreshDashboard() {
   try {
     const d = await api('/api/admin/dashboard');
-    $('dash-completed').textContent = d.orders_completed;
-    $('dash-progress').textContent = d.orders_in_progress;
-    $('dash-sales').textContent = d.sales_completed.toFixed(2);
-    $('dash-avg').textContent = d.avg_order_value.toFixed(2);
+
+    const completed = $('dash-completed');
+    const progress  = $('dash-progress');
+    const sales     = $('dash-sales');
+    const avg       = $('dash-avg');
+
+    if (completed) completed.textContent = d.orders_completed;
+    if (progress)  progress.textContent  = d.orders_in_progress;
+    if (sales)     sales.textContent     = d.sales_completed.toFixed(2);
+    if (avg)       avg.textContent       = d.avg_order_value.toFixed(2);
 
     const updated = $('dash-updated');
-    if (updated) updated.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    if (updated) {
+      const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      updated.textContent = `Updated at ${t}`;
+    }
 
     const root = $('dash-top');
+    if (!root) return;
     root.replaceChildren();
+
     if (d.top_items.length === 0) {
-      root.appendChild(el('p', { className: 'muted', text: 'No items sold yet today.' }));
-    } else {
-      for (const it of d.top_items) {
-        root.appendChild(el('div', { className: 'row' }, [
-          el('div', { className: 'info' }, [el('div', { className: 'num', text: it.name })]),
-          el('div', { text: `${it.qty}× — ${it.revenue.toFixed(2)}` }),
-        ]));
-      }
+      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      icon.setAttribute('class', 'empty-state-icon');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', '/shared/icons.svg#utensils');
+      icon.appendChild(use);
+
+      const p = el('p', { className: 'muted', text: 'No items sold yet today.' });
+      root.appendChild(icon);
+      root.appendChild(p);
+      return;
     }
+
+    d.top_items.forEach((it, idx) => {
+      root.appendChild(el('div', { className: 'top-item' }, [
+        el('span', { className: 'top-item-rank', text: String(idx + 1) }),
+        el('span', { className: 'top-item-name', text: it.name }),
+        el('span', { className: 'top-item-qty', text: `${it.qty}×` }),
+        el('span', { className: 'top-item-revenue', text: it.revenue.toFixed(2) }),
+      ]));
+    });
   } catch (e) {
     if (e.message !== 'unauthorized') console.warn('dashboard failed', e);
   }

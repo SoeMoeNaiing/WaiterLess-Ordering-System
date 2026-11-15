@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin — Restaurant</title>
+  <link rel="stylesheet" href="/shared/tokens.css" />
   <link rel="stylesheet" href="/admin/style.css" />
 </head>
 <body>
@@ -61,20 +62,65 @@
       <h1 class="page-title" id="page-title">Dashboard</h1>
 
       <section class="panel" data-panel="dashboard">
-        <div class="toolbar">
-          <span class="muted" id="dash-updated">—</span>
-          <button id="dash-refresh">Refresh</button>
+
+        <div class="dash-header">
+          <div>
+            <h2 class="dash-title">Today</h2>
+            <p class="dash-sub" id="dash-updated">—</p>
+          </div>
+          <button id="dash-refresh" class="btn btn-sm">
+            <svg class="icon icon-sm"><use href="/shared/icons.svg#refresh"/></svg>
+            Refresh
+          </button>
         </div>
-        <div class="stats">
-          <div class="stat"><div class="num" id="dash-completed">—</div><div class="lbl" data-i18n="admin.served">Served</div></div>
-          <div class="stat warn"><div class="num" id="dash-progress">—</div><div class="lbl" data-i18n="admin.in_progress">In progress</div></div>
-          <div class="stat success"><div class="num" id="dash-sales">—</div><div class="lbl" data-i18n="admin.sales">Sales</div></div>
-          <div class="stat muted"><div class="num" id="dash-avg">—</div><div class="lbl" data-i18n="admin.avg_order">Avg order</div></div>
+
+        <div class="dash-stats">
+          <div class="dash-stat">
+            <div class="dash-stat-icon dash-stat-icon--success">
+              <svg class="icon"><use href="/shared/icons.svg#check-circle"/></svg>
+            </div>
+            <div class="dash-stat-body">
+              <div class="dash-stat-value" id="dash-completed">—</div>
+              <div class="dash-stat-label">Served</div>
+            </div>
+          </div>
+
+          <div class="dash-stat">
+            <div class="dash-stat-icon dash-stat-icon--warn">
+              <svg class="icon"><use href="/shared/icons.svg#clock"/></svg>
+            </div>
+            <div class="dash-stat-body">
+              <div class="dash-stat-value" id="dash-progress">—</div>
+              <div class="dash-stat-label">In progress</div>
+            </div>
+          </div>
+
+          <div class="dash-stat">
+            <div class="dash-stat-icon dash-stat-icon--primary">
+              <svg class="icon"><use href="/shared/icons.svg#shopping-cart"/></svg>
+            </div>
+            <div class="dash-stat-body">
+              <div class="dash-stat-value" id="dash-sales">—</div>
+              <div class="dash-stat-label">Sales</div>
+            </div>
+          </div>
+
+          <div class="dash-stat">
+            <div class="dash-stat-icon dash-stat-icon--neutral">
+              <svg class="icon"><use href="/shared/icons.svg#utensils"/></svg>
+            </div>
+            <div class="dash-stat-body">
+              <div class="dash-stat-value" id="dash-avg">—</div>
+              <div class="dash-stat-label">Avg order</div>
+            </div>
+          </div>
         </div>
+
         <div class="card">
-          <h2>Top items today</h2>
+          <h2 class="card-title">Top items today</h2>
           <div id="dash-top"><p class="muted">loading…</p></div>
         </div>
+
       </section>
 
       <section class="panel" data-panel="tables">
@@ -224,6 +270,6 @@
   </div>
 
 <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/admin/app.js?v=23"></script>
+  <script type="module" src="/admin/app.js?v=30"></script>
 </body>
 </html>
