@@ -1075,3 +1075,43 @@ code {
 .table-actions .btn-full {
   grid-column: 1 / -1;
 }
+
+/* ---------- A3: Categories ---------- */
+
+.categories-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.category-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: #f9fafb;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.category-row:hover { border-color: #d1d5db; }
+
+.category-row .input {
+  padding: 6px 10px;
+  font-size: var(--text-sm);
+  min-height: 34px;
+}
+
+.category-row .cat-name { flex: 1; min-width: 0; }
+.category-row .cat-order { width: 72px; flex-shrink: 0; }
+
+.category-row .actions-row { flex-shrink: 0; }
+
+.category-row .btn { min-height: 34px; padding: 6px 12px; font-size: 12px; }
+
+@media (max-width: 640px) {
+  .category-row { flex-wrap: wrap; }
+  .category-row .cat-name { flex-basis: 100%; }
+}

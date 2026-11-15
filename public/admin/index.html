@@ -164,14 +164,22 @@
 
       <section class="panel" data-panel="menu">
         <div class="card">
-          <h2>Categories</h2>
+          <div class="card-head-row">
+            <div>
+              <h2 class="card-title" style="margin-bottom: 4px;">Categories</h2>
+              <p class="muted" id="categories-count" style="margin: 0; font-size: var(--text-xs);">—</p>
+            </div>
+          </div>
           <div class="form-row">
-            <input id="new-category-name" type="text" placeholder="Category name" />
-            <input id="new-category-order" type="number" placeholder="Order" value="0" style="max-width: 6rem;" />
-            <button id="add-category" class="primary">Add</button>
+            <input id="new-category-name" type="text" placeholder="Category name" class="input" />
+            <input id="new-category-order" type="number" placeholder="Order" value="0" class="input" style="max-width: 6rem;" />
+            <button id="add-category" class="btn btn-primary">
+              <svg class="icon icon-sm"><use href="/shared/icons.svg#plus"/></svg>
+              Add
+            </button>
           </div>
           <p id="add-category-error" class="error"></p>
-          <div id="categories"><p class="muted">loading…</p></div>
+          <div id="categories" class="categories-list"></div>
         </div>
         <div class="card">
           <h2>Menu items</h2>
@@ -287,6 +295,6 @@
   </div>
 
 <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/admin/app.js?v=33"></script>
+  <script type="module" src="/admin/app.js?v=34"></script>
 </body>
 </html>

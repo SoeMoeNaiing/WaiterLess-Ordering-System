@@ -354,47 +354,79 @@ async function refreshCategories() {
   if (!root) return;
   root.replaceChildren();
 
+  const countEl = $('categories-count');
+  if (countEl) {
+    countEl.textContent = cats.length === 0
+      ? 'No categories yet'
+      : `${cats.length} categor${cats.length === 1 ? 'y' : 'ies'}`;
+  }
+
   if (cats.length === 0) {
-    root.appendChild(el('p', { className: 'muted', text: 'No categories yet.' }));
+    const empty = el('p', {
+      className: 'muted',
+      text: 'No categories yet. Add one above.',
+      style: 'text-align: center; padding: var(--space-5) 0; margin: 0;',
+    });
+    root.appendChild(empty);
     return;
   }
+
   for (const c of cats) root.appendChild(renderCategory(c));
 }
 
 function renderCategory(c) {
-  const name = el('input', { type: 'text', value: c.name, style: 'flex:1; max-width: 16rem;' });
-  const order = el('input', { type: 'number', value: c.sort_order, style: 'max-width: 6rem;' });
+  const name = el('input', {
+    type: 'text',
+    value: c.name,
+    className: 'input cat-name',
+    placeholder: 'Category name',
+  });
+  const order = el('input', {
+    type: 'number',
+    value: c.sort_order,
+    className: 'input cat-order',
+    placeholder: 'Order',
+  });
 
-  const save = el('button', {
-    text: t('admin.save'),
+  const saveBtn = el('button', {
+    className: 'btn btn-sm',
     onclick: async () => {
       try {
         await api(`/api/admin/categories/${c.id}`, {
           method: 'PUT',
-          body: JSON.stringify({ name: name.value.trim(), sort_order: Number(order.value) || 0 }),
+          body: JSON.stringify({
+            name: name.value.trim(),
+            sort_order: Number(order.value) || 0,
+          }),
         });
         toast('Category saved', 'success');
         await Promise.all([refreshCategories(), refreshMenuItems()]);
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message === 'unauthorized') return;
+        toast(e.message, 'error');
+      }
     },
-  });
+  }, [makeIcon('check'), document.createTextNode('Save')]);
 
-  const del = el('button', {
-    text: t('admin.delete'),
-    className: 'danger',
+  const delBtn = el('button', {
+    className: 'btn btn-sm btn-danger',
     onclick: async () => {
-      if (!confirm(`Delete "${c.name}"?`)) return;
+      if (!confirm(`Delete "${c.name}"? Items will become uncategorized.`)) return;
       try {
         await api(`/api/admin/categories/${c.id}`, { method: 'DELETE' });
         toast('Category deleted', 'success');
         await Promise.all([refreshCategories(), refreshMenuItems()]);
-      } catch (e) { if (e.message !== 'unauthorized') toast(e.message, 'error'); }
+      } catch (e) {
+        if (e.message === 'unauthorized') return;
+        toast(e.message, 'error');
+      }
     },
-  });
+  }, [makeIcon('trash'), document.createTextNode('Delete')]);
 
-  return el('div', { className: 'row' }, [
-    el('div', { className: 'info', style: 'display:flex; gap:0.5rem; align-items:center;' }, [name, order]),
-    el('div', { className: 'actions' }, [save, del]),
+  return el('div', { className: 'category-row' }, [
+    name,
+    order,
+    el('div', { className: 'actions-row' }, [saveBtn, delBtn]),
   ]);
 }
 
@@ -1380,3 +1412,14 @@ $('options-cancel')?.addEventListener('click', closeOptionsModal);
 $('options-modal')?.addEventListener('click', (e) => {
   if (e.target.id === 'options-modal') closeOptionsModal();
 });
+
+// ---------- A3: SVG helper for JS-rendered buttons ----------
+
+function makeIcon(name, sizeClass = 'icon-sm') {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', `icon ${sizeClass}`);
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `/shared/icons.svg#${name}`);
+  svg.appendChild(use);
+  return svg;
+}
