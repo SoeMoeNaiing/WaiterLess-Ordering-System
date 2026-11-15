@@ -745,6 +745,7 @@ async function refreshLiveBadgeOnly() {
 async function refreshLive() {
   const root = $('live-list');
   if (!root) return;
+
   try {
     const res = await fetch('/api/kitchen/orders');
     if (res.status === 401) return;
@@ -753,49 +754,74 @@ async function refreshLive() {
 
     liveOrdersCache = orders;
     updateLiveBadge(orders.length);
+
+    const countEl = $('live-count');
+    if (countEl) {
+      countEl.textContent = orders.length === 0
+        ? 'No active orders'
+        : `${orders.length} active order${orders.length === 1 ? '' : 's'}`;
+    }
+
     root.replaceChildren();
 
     if (orders.length === 0) {
-      selectedLiveOrderId = null;
-      root.appendChild(el('p', { className: 'muted', text: 'No active orders.' }));
+      root.appendChild(el('p', {
+        className: 'muted',
+        text: 'No active orders.',
+        style: 'text-align: center; padding: var(--space-6) 0; margin: 0;',
+      }));
       return;
     }
+
     if (!selectedLiveOrderId || !orders.find((o) => o.id === selectedLiveOrderId)) {
       selectedLiveOrderId = orders[0].id;
     }
 
     for (const o of orders) {
-      const info = el('div', { className: 'info' }, [
-        el('div', { className: 'num' }, [
-          `#${o.id} — Table ${o.table_number}`,
-          el('span', {
-            className: `badge ${o.status === 'preparing' ? 'warn' : o.status === 'ready' ? 'on' : 'idle'}`,
-            text: o.status,
-          }),
-        ]),
-        el('div', { className: 'label' }, o.items.map((it) => `${it.qty}× ${it.name_snapshot}`).join(', ')),
+      const statusClass = `live-order-status--${o.status}`;
+      const rowClass = `live-order live-order--${o.status}${o.id === selectedLiveOrderId ? ' is-selected' : ''}`;
+
+      const head = el('div', { className: 'live-order-head' }, [
+        el('span', { className: 'live-order-table', text: `Table ${o.table_number}` }),
+        el('span', { className: `live-order-status ${statusClass}`, text: o.status }),
       ]);
 
-      const actions = el('div', { className: 'actions' });
+      const itemsSummary = o.items.map((it) => `${it.qty}× ${it.name_snapshot}`).join(', ');
+
+      const main = el('div', { className: 'live-order-main' }, [
+        head,
+        el('div', { className: 'live-order-items', text: itemsSummary, title: itemsSummary }),
+      ]);
+
+      const total = el('div', { className: 'live-order-total', text: o.total.toFixed(2) });
+
+      const actions = el('div', { className: 'live-order-actions' });
       if (o.status === 'placed') {
         actions.appendChild(el('button', {
-          className: 'primary', text: `${t('admin.confirm')} (C)`,
+          className: 'btn btn-sm btn-primary',
           onclick: (e) => { e.stopPropagation(); confirmOrder(o.id); },
-        }));
+        }, [makeIcon('check'), document.createTextNode('Confirm')]));
       }
       if (o.status === 'preparing' || o.status === 'ready') {
         actions.appendChild(el('button', {
-          className: 'primary', text: `${t('admin.serve')} (S)`,
+          className: 'btn btn-sm btn-primary',
           onclick: (e) => { e.stopPropagation(); serveOrder(o.id); },
-        }));
+        }, [makeIcon('check-circle'), document.createTextNode('Serve')]));
       }
       actions.appendChild(el('button', {
-        text: `${t('admin.reject')} (X)`, className: 'danger',
+        className: 'btn btn-sm btn-danger',
         onclick: (e) => { e.stopPropagation(); rejectOrder(o.id); },
-      }));
+      }, [makeIcon('close', 'icon-sm')]));
 
-      const row = el('div', { className: `row${o.id === selectedLiveOrderId ? ' selected' : ''}` }, [info, actions]);
-      row.onclick = () => { selectedLiveOrderId = o.id; refreshLive(); };
+      const orderIdEl = el('div', { className: 'live-order-id', text: `#${o.id}` });
+
+      const row = el('div', { className: rowClass }, [
+        orderIdEl, main, total, actions,
+      ]);
+      row.onclick = () => {
+        selectedLiveOrderId = o.id;
+        refreshLive();
+      };
       root.appendChild(row);
     }
   } catch (e) {
@@ -1494,3 +1520,67 @@ function makeIcon(name, sizeClass = 'icon-sm') {
   svg.appendChild(use);
   return svg;
 }
+
+// Wire live-refresh button (added in A4)
+$('live-refresh')?.addEventListener('click', () => refreshLive());
+
+// ---------- A4: kitchen URL wiring ----------
+// (Standalone block — runs at script load, wires the kitchen card.
+//  Safe to run even if elements are already set.)
+
+(function wireKitchenUrl() {
+  const kUrlEl = document.getElementById('kitchen-url');
+  const kCopy   = document.getElementById('copy-kitchen-url');
+  const kOpen   = document.getElementById('open-kitchen-url');
+
+  if (!kUrlEl && !kCopy && !kOpen) return; // not on this page
+
+  // Build the URL from current origin. Fall back to window.location.hostname
+  // in case origin is somehow blank (older browsers / odd contexts).
+  const origin = window.location.origin || `${window.location.protocol}//${window.location.host}`;
+  const kitchenUrl = `${origin}/kitchen/`;
+
+  if (kUrlEl) {
+    kUrlEl.textContent = kitchenUrl;
+    kUrlEl.title = kitchenUrl;
+  }
+
+  if (kOpen) {
+    kOpen.href = kitchenUrl;
+  }
+
+  if (kCopy) {
+    kCopy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(kitchenUrl);
+        if (typeof toast === 'function') {
+          toast('Kitchen URL copied', 'success');
+        } else {
+          kCopy.textContent = 'Copied!';
+          setTimeout(() => { kCopy.textContent = 'Copy'; }, 1500);
+        }
+      } catch (err) {
+        // Clipboard API fails on insecure contexts (http://) in some browsers.
+        // Fall back to a hidden textarea + execCommand.
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = kitchenUrl;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          if (typeof toast === 'function') {
+            toast('Kitchen URL copied', 'success');
+          }
+        } catch (fallbackErr) {
+          console.warn('[kitchen-url] copy failed:', err, fallbackErr);
+          if (typeof toast === 'function') {
+            toast('Copy failed — select and copy manually', 'error');
+          }
+        }
+      }
+    });
+  }
+})();

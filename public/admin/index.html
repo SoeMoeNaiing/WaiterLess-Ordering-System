@@ -204,15 +204,47 @@
       </section>
 
       <section class="panel" data-panel="live">
+
+        <div class="card kitchen-card">
+          <div class="kitchen-card-body">
+            <div class="kitchen-card-icon">
+              <svg class="icon icon-lg"><use href="/shared/icons.svg#utensils"/></svg>
+            </div>
+            <div class="kitchen-card-info">
+              <h3 class="kitchen-card-title">Kitchen display</h3>
+              <p class="kitchen-card-sub">Open this URL on another device on the same Wi-Fi to give kitchen staff their own screen.</p>
+              <div class="kitchen-url-row">
+                <code id="kitchen-url" class="kitchen-url">…</code>
+                <button id="copy-kitchen-url" class="btn btn-sm">
+                  <svg class="icon icon-sm"><use href="/shared/icons.svg#copy"/></svg>
+                  Copy
+                </button>
+                <a id="open-kitchen-url" href="/kitchen/" target="_blank" class="btn btn-sm btn-primary">
+                  <svg class="icon icon-sm"><use href="/shared/icons.svg#arrow-left"/></svg>
+                  Open
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
-          <h2>Live orders</h2>
-          <p class="muted">Confirm new orders, mark served, or reject.</p>
-          <div id="live-list"><p class="muted">loading…</p></div>
-          <p class="muted shortcut-hint">
-            Shortcuts: <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>C</kbd> confirm ·
-            <kbd>S</kbd> serve · <kbd>X</kbd> reject · <kbd>Enter</kbd> primary action
+          <div class="card-head-row">
+            <div>
+              <h2 class="card-title" style="margin-bottom: 4px;">Live orders</h2>
+              <p class="muted" id="live-count" style="margin: 0; font-size: var(--text-xs);">—</p>
+            </div>
+            <button id="live-refresh" class="btn btn-sm">
+              <svg class="icon icon-sm"><use href="/shared/icons.svg#refresh"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div id="live-list" class="live-orders-list"></div>
+          <p class="shortcut-hint">
+            <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>C</kbd> confirm · <kbd>S</kbd> serve · <kbd>X</kbd> reject
           </p>
         </div>
+
       </section>
 
       <section class="panel" data-panel="orders">
@@ -312,6 +344,6 @@
   </div>
 
 <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/admin/app.js?v=36"></script>
+  <script type="module" src="/admin/app.js?v=37"></script>
 </body>
 </html>

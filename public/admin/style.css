@@ -1439,3 +1439,189 @@ code {
   border-top: 1px solid var(--border, #e5e7eb);
   background: #f9fafb;
 }
+
+/* ---------- A4: Live orders + kitchen card ---------- */
+
+.kitchen-card {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e7f0ff 100%);
+  border: 1px solid #cfe0f5;
+}
+
+.kitchen-card-body {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.kitchen-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: #0a58ca;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kitchen-card-info { flex: 1; min-width: 0; }
+
+.kitchen-card-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text, #111827);
+}
+
+.kitchen-card-sub {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted, #6b7280);
+  line-height: var(--leading-normal);
+}
+
+.kitchen-url-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.kitchen-url {
+  flex: 1;
+  min-width: 14rem;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #cfe0f5;
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, monospace;
+  font-size: var(--text-xs);
+  color: #084298;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 2;
+}
+
+.live-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.live-order {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+  border-left: 4px solid #e5e7eb;
+  border-radius: var(--radius-sm);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  cursor: pointer;
+}
+
+.live-order:hover { box-shadow: var(--shadow-sm); }
+
+.live-order.is-selected {
+  border-left-color: #0a58ca;
+  background: #f0f4ff;
+  box-shadow: 0 0 0 2px #e7f0ff;
+}
+
+.live-order--placed    { border-left-color: #0a58ca; }
+.live-order--preparing { border-left-color: #f59e0b; }
+.live-order--ready     { border-left-color: #198754; }
+
+.live-order-id {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted, #6b7280);
+  font-family: ui-monospace, monospace;
+  min-width: 44px;
+}
+
+.live-order-main { flex: 1; min-width: 0; }
+
+.live-order-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.live-order-table {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text, #111827);
+}
+
+.live-order-status {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: var(--font-semibold);
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+}
+.live-order-status--placed    { background: #e7f0ff; color: #0a58ca; }
+.live-order-status--preparing { background: #fff3cd; color: #856404; }
+.live-order-status--ready     { background: #d1f4d1; color: #155724; }
+
+.live-order-items {
+  font-size: var(--text-xs);
+  color: var(--text-muted, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-order-total {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text, #111827);
+  min-width: 90px;
+  text-align: right;
+}
+
+.live-order-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.live-order-actions .btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  min-height: 30px;
+}
+
+.shortcut-hint {
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border, #e5e7eb);
+  font-size: var(--text-xs);
+  color: var(--text-muted, #6b7280);
+}
+.shortcut-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  margin: 0 1px;
+  border: 1px solid #d1d5db;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: #fff;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: #374151;
+}
+
+@media (max-width: 720px) {
+  .kitchen-card-body { flex-direction: column; }
+  .live-order { flex-wrap: wrap; }
+  .live-order-actions { flex-basis: 100%; justify-content: flex-end; margin-top: var(--space-2); }
+}
