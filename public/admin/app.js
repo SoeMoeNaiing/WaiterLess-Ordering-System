@@ -1232,6 +1232,9 @@ async function boot() {
   }, 30000); // 30s safety net — socket is primary
 }
 
+// Wire the close-x button for the options modal
+$('options-modal-close')?.addEventListener('click', closeOptionsModal);
+
 boot();
 
 // ---------- Menu item options modal ----------
@@ -1275,22 +1278,32 @@ function closeOptionsModal() {
 
 function renderOptionsModal() {
   const body = $('options-modal-body');
+  const nameEl = $('options-modal-item-name');
   if (!body) return;
-  body.replaceChildren();
 
-  body.appendChild(el('div', { className: 'modal-item-name', text: currentModalItemName }));
-
-  if (draftOptions.length === 0) {
-    body.appendChild(el('p', { className: 'muted', text: 'No options yet. Add a group below.' }));
+  if (nameEl) {
+    nameEl.replaceChildren();
+    nameEl.appendChild(document.createTextNode('Customizing: '));
+    const strong = document.createElement('strong');
+    strong.textContent = currentModalItemName || '—';
+    nameEl.appendChild(strong);
   }
 
-  draftOptions.forEach((group, gi) => {
-    body.appendChild(renderGroupRow(group, gi));
-  });
+  body.replaceChildren();
 
-  body.appendChild(el('button', {
-    className: 'modal-add-group',
-    text: '+ Add group',
+  if (draftOptions.length === 0) {
+    const empty = el('div', { className: 'options-empty' });
+    empty.appendChild(makeIcon('settings', 'icon-xl'));
+    empty.appendChild(el('p', { text: 'No options yet. Add a group to get started.', style: 'margin: 0;' }));
+    body.appendChild(empty);
+  } else {
+    draftOptions.forEach((group, gi) => {
+      body.appendChild(renderGroupRow(group, gi));
+    });
+  }
+
+  const addGroupBtn = el('button', {
+    className: 'option-add-group',
     onclick: () => {
       draftOptions.push({
         name: '',
@@ -1300,34 +1313,38 @@ function renderOptionsModal() {
       });
       renderOptionsModal();
     },
-  }));
+  }, [makeIcon('plus'), document.createTextNode('Add group')]);
+  body.appendChild(addGroupBtn);
 }
 
 function renderGroupRow(group, gi) {
   const nameInput = el('input', {
     type: 'text',
-    className: 'group-name-input',
+    className: 'input option-group-name',
     value: group.name,
     placeholder: 'Group name (e.g. Spice Level)',
   });
   nameInput.addEventListener('input', (e) => { draftOptions[gi].name = e.target.value; });
 
-  const requiredCheck = el('input', {
-    type: 'checkbox',
-    checked: group.is_required,
-  });
+  const removeGroupBtn = el('button', {
+    className: 'option-group-remove',
+    title: 'Remove group',
+    onclick: () => {
+      if (!confirm(`Remove group "${group.name || 'unnamed'}"?`)) return;
+      draftOptions.splice(gi, 1);
+      renderOptionsModal();
+    },
+  }, [makeIcon('trash')]);
+
+  const requiredCheck = el('input', { type: 'checkbox', checked: group.is_required });
   requiredCheck.addEventListener('change', (e) => {
     draftOptions[gi].is_required = e.target.checked;
   });
 
-  const singleCheck = el('input', {
-    type: 'checkbox',
-    checked: group.is_single_choice,
-  });
+  const singleCheck = el('input', { type: 'checkbox', checked: group.is_single_choice });
   singleCheck.addEventListener('change', (e) => {
     draftOptions[gi].is_single_choice = e.target.checked;
     if (e.target.checked) {
-      // Enforce only one default
       let seen = false;
       for (const c of draftOptions[gi].choices) {
         if (c.is_default) {
@@ -1339,37 +1356,27 @@ function renderGroupRow(group, gi) {
     renderOptionsModal();
   });
 
-  const choicesContainer = el('div', { className: 'choices-container' });
+  const flags = el('div', { className: 'option-group-flags' }, [
+    el('label', {}, [requiredCheck, document.createTextNode('Required')]),
+    el('label', {}, [singleCheck, document.createTextNode('Single choice')]),
+  ]);
+
+  const choicesContainer = el('div', { className: 'option-choices' });
   group.choices.forEach((choice, ci) => {
     choicesContainer.appendChild(renderChoiceRow(group, gi, choice, ci));
   });
 
   const addChoiceBtn = el('button', {
-    className: 'add-choice-btn',
-    text: '+ Add choice',
+    className: 'option-add-choice',
     onclick: () => {
       draftOptions[gi].choices.push({ name: '', is_default: false });
       renderOptionsModal();
     },
-  });
+  }, [makeIcon('plus'), document.createTextNode('Add choice')]);
 
-  const removeGroupBtn = el('button', {
-    className: 'remove-group-btn',
-    text: '\u00d7',
-    title: 'Remove group',
-    onclick: () => {
-      if (!confirm(`Remove group "${group.name || 'unnamed'}"?`)) return;
-      draftOptions.splice(gi, 1);
-      renderOptionsModal();
-    },
-  });
-
-  return el('div', { className: 'modal-group' }, [
-    el('div', { className: 'group-header' }, [nameInput, removeGroupBtn]),
-    el('div', { className: 'group-flags' }, [
-      el('label', {}, [requiredCheck, ' Required']),
-      el('label', {}, [singleCheck, ' Single choice']),
-    ]),
+  return el('div', { className: 'option-group-card' }, [
+    el('div', { className: 'option-group-head' }, [nameInput, removeGroupBtn]),
+    flags,
     choicesContainer,
     addChoiceBtn,
   ]);
@@ -1378,7 +1385,7 @@ function renderGroupRow(group, gi) {
 function renderChoiceRow(group, gi, choice, ci) {
   const nameInput = el('input', {
     type: 'text',
-    className: 'choice-name-input',
+    className: 'option-choice-name',
     value: choice.name,
     placeholder: 'Choice name',
   });
@@ -1401,18 +1408,20 @@ function renderChoiceRow(group, gi, choice, ci) {
   });
 
   const removeBtn = el('button', {
-    className: 'remove-choice-btn',
-    text: '\u00d7',
+    className: 'option-choice-remove',
     title: 'Remove choice',
     onclick: () => {
       draftOptions[gi].choices.splice(ci, 1);
       renderOptionsModal();
     },
-  });
+  }, [makeIcon('close', 'icon-sm')]);
 
-  return el('div', { className: 'choice-row' }, [
+  return el('div', { className: 'option-choice-row' }, [
     nameInput,
-    el('label', { className: 'choice-default-label' }, [defaultInput, ' Default']),
+    el('label', { className: 'option-choice-default' }, [
+      defaultInput,
+      document.createTextNode('Default'),
+    ]),
     removeBtn,
   ]);
 }

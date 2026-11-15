@@ -293,16 +293,25 @@
   <!-- Options modal (per menu item) -->
   <div id="options-modal" class="modal">
     <div class="modal-inner modal-wide">
-      <h2>Customize item</h2>
-      <div id="options-modal-body"></div>
-      <div class="modal-actions">
-        <button id="options-cancel">Cancel</button>
-        <button id="options-save" class="primary">Save</button>
+      <div class="options-modal-header">
+        <h2>Customize item</h2>
+        <button id="options-modal-close" class="close-x" title="Close">
+          <svg class="icon"><use href="/shared/icons.svg#close"/></svg>
+        </button>
+      </div>
+      <div class="options-modal-item-name" id="options-modal-item-name">—</div>
+      <div class="options-modal-body" id="options-modal-body"></div>
+      <div class="options-modal-footer">
+        <button id="options-cancel" class="btn">Cancel</button>
+        <button id="options-save" class="btn btn-primary">
+          <svg class="icon icon-sm"><use href="/shared/icons.svg#check"/></svg>
+          Save
+        </button>
       </div>
     </div>
   </div>
 
 <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/admin/app.js?v=35"></script>
+  <script type="module" src="/admin/app.js?v=36"></script>
 </body>
 </html>
