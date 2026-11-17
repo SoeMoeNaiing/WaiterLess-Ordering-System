@@ -306,6 +306,13 @@ export function customerRouter({ db, orderRateLimit }) {
     const orderItems = db
       .prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id')
       .all(orderId);
+    const optionsStmt = db.prepare(
+      'SELECT group_name_snapshot, choice_name_snapshot FROM order_item_options WHERE order_item_id = ?'
+    );
+    const itemsWithOptions = orderItems.map((it) => ({
+      ...it,
+      options: optionsStmt.all(it.id),
+    }));
 
     db.prepare('UPDATE tables SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?').run(table.id);
 
@@ -313,11 +320,11 @@ export function customerRouter({ db, orderRateLimit }) {
 
     const io = getIO();
     if (io) {
-      io.to('kitchen').emit('order:new', { order, items: orderItems });
+      io.to('kitchen').emit('order:new', { order, items: itemsWithOptions });
       io.to(`order-${orderId}`).emit('order:updated', { orderId });
     }
 
-    res.status(201).json({ order, items: orderItems });
+    res.status(201).json({ order, items: itemsWithOptions });
   });
 
   router.get('/api/customer/orders', (req, res) => {
@@ -365,8 +372,15 @@ export function customerRouter({ db, orderRateLimit }) {
     if (error === 'inactive') return res.status(410).json({ error: 'table inactive' });
     if (error) return res.status(400).json({ error: 'token is required' });
 
+    // Match the list endpoint's visibility rules: orders from a cleared
+    // session (or older than the lookback window) must not be fetchable by id.
     const order = db
-      .prepare('SELECT * FROM orders WHERE id = ? AND table_id = ?')
+      .prepare(
+        `SELECT * FROM orders
+          WHERE id = ? AND table_id = ?
+            AND session_ended_at IS NULL
+            AND created_at > datetime('now', '-12 hours')`
+      )
       .get(orderId, table.id);
 
     if (!order) return res.status(404).json({ error: 'not found' });

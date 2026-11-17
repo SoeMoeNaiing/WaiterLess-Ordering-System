@@ -192,3 +192,33 @@ test('PATCH on unknown id returns 404', async () => {
   assert.equal(res.status, 404);
   db.close();
 });
+
+test('kitchen orders hides orders from a cleared session', async () => {
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
+  const ended = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+  const active = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+  db.prepare('UPDATE orders SET session_ended_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(ended.order.id);
+
+  const defaultRes = await agent.get('/api/kitchen/orders');
+  assert.deepEqual(defaultRes.body.map((o) => o.id), [active.order.id]);
+
+  const allRes = await agent.get('/api/kitchen/orders?status=all');
+  assert.deepEqual(allRes.body.map((o) => o.id), [active.order.id]);
+  db.close();
+});
+
+test('PATCH on an order from a cleared session returns 410', async () => {
+  const { app, agent, db } = await appWithDb();
+  const { table, item } = await makeTableAndItem(agent);
+  const o = await placeOrder(app, table.qr_token, [{ itemId: item.id, qty: 1 }]);
+  db.prepare('UPDATE orders SET session_ended_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(o.order.id);
+
+  const res = await agent.patch(`/api/kitchen/orders/${o.order.id}`)
+    .send({ status: 'preparing' });
+  assert.equal(res.status, 410);
+  assert.equal(res.body.error, 'order session has ended');
+  db.close();
+});

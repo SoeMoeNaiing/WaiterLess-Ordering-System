@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import QRCode from 'qrcode';
 import { newTableToken } from '../utils/tokens.js';
+import { getIO } from '../sockets/registry.js';
 
 function getActiveOrderCount(db, tableId) {
   return db.prepare(
@@ -161,6 +162,11 @@ export function adminTablesRouter({ db }) {
     ).run(id);
 
     db.prepare('UPDATE tables SET last_activity_at = NULL WHERE id = ?').run(id);
+
+    if (result.changes > 0) {
+      const io = getIO();
+      if (io) io.to('kitchen').emit('session:cleared', { tableId: id, cleared: result.changes });
+    }
 
     res.json({ cleared: result.changes, in_progress_count });
   });

@@ -98,7 +98,20 @@
       font-size: 1.05rem;
     }
     .btn-done:hover { filter: brightness(1.15); }
-  
+
+    /* Action buttons are rendered by kitchen.js with these classes */
+    .btn-confirm, .btn-serve {
+      flex: 1;
+      background: #198754; color: #fff; border: none;
+      font: inherit; font-weight: 700; font-size: 1rem;
+      padding: 0.7rem; border-radius: 6px; cursor: pointer;
+    }
+    .btn-confirm { background: #0a58ca; }
+    .btn-confirm:hover, .btn-serve:hover { filter: brightness(1.15); }
+
+    .card.preparing { border-left-color: #0a58ca; }
+    .card.ready { border-left-color: #6f42c1; }
+
     .sound-btn {
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.18);
@@ -228,6 +241,6 @@
     <span>Tap anywhere to enable order sounds</span>
   </div>
 
-<script type="module" src="/kitchen/kitchen.js?v=9"></script>
+<script type="module" src="/kitchen/kitchen.js?v=10"></script>
 </body>
 </html>

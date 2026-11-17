@@ -279,12 +279,9 @@ function renderTable(tbl) {
       if (!confirm(`Clear session for ${tbl.table_number}? Customer will no longer see previous orders.`)) return;
       try {
         const res = await api(`/api/admin/tables/${tbl.id}/clear-session`, { method: 'POST' });
-        if (res.in_progress_count > 0) {
-          toast(`Cleared ${res.cleared}. Warning: ${res.in_progress_count} still in kitchen.`, 'warn');
-        } else {
-          toast(`Cleared ${res.cleared} order(s)`, 'success');
-        }
+        toast(`Cleared ${res.cleared} order(s) for ${tbl.table_number}`, 'success');
         await refresh();
+        await refreshLive();
       } catch (e) {
         if (e.message === 'unauthorized') return;
         if (e.message.includes('not found')) {
@@ -1218,6 +1215,14 @@ function connectAdminSocket() {
     refreshLive();
     refreshDashboard();
     refreshLiveBadgeOnly();
+  });
+
+  adminSocket.on('session:cleared', (payload) => {
+    console.log('[admin socket] session:cleared', payload?.tableId);
+    refreshLive();
+    refreshDashboard();
+    refreshLiveBadgeOnly();
+    refresh();
   });
 
   adminSocket.on('disconnect', (reason) => {

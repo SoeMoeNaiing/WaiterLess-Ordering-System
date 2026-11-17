@@ -136,6 +136,12 @@ function connectSocket() {
     refresh();
   });
 
+  // A cleared table session removes its orders from the kitchen board.
+  socket.on('session:cleared', (payload) => {
+    console.log('[kitchen socket] session:cleared', payload?.tableId);
+    refresh();
+  });
+
   socket.on('disconnect', (reason) => {
     console.log('[kitchen socket] disconnected:', reason);
     updateLiveDot('polling');

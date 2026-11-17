@@ -17,6 +17,7 @@
   "customer.error_410": "ဤစားပွဲ မလုပ်ဆောင်တော့ပါ။ ဝန်ထမ်းကို မေးပါ။",
   "customer.error_network": "ကွန်ရက် အမှား",
   "customer.error_generic": "မီနူး ရယူ၍ မရပါ။",
+  "customer.too_many_orders": "ဤစားပွဲမှ အော်ဒါများ များလွန်းပါသည်။ {seconds} စက္ကန့်စောင့်ပြီး ထပ်မံကြိုးစားပါ။",
   "status.title": "သင့်အော်ဒါများ",
   "status.confirmed": "အော်ဒါ အတည်ပြုပြီး",
   "status.preparing": "ပြင်ဆင်နေသည်",

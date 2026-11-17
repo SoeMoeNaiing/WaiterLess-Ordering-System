@@ -456,20 +456,27 @@ async function placeOrder() {
   btn.disabled = true;
   btn.textContent = t('customer.placing');
 
+  let res = null;
+  let body = {};
   try {
-    const res = await fetch('/api/customer/orders', {
+    res = await fetch('/api/customer/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const body = await res.json().catch(() => ({}));
+    body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
 
     cart = [];
     saveCart(token);
     window.location.href = `/t/${token}/orders`;
   } catch (e) {
-    err.textContent = e.message || t('customer.error_generic');
+    let message = body.error || e.message || t('customer.error_generic');
+    if (res?.status === 429) {
+      const secs = Math.max(1, Number(body.retry_after) || 1);
+      message = t('customer.too_many_orders').replace('{seconds}', String(secs));
+    }
+    err.textContent = message;
     err.style.display = 'block';
     btn.disabled = false;
     btn.textContent = t('customer.place_order');

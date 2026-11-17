@@ -1,9 +1,11 @@
-import { initI18n, t, getLang, setLang, applyTranslations } from '/i18n/i18n.js';
+import { initI18n, t, applyTranslations } from '/i18n/i18n.js';
 
 // Socket.IO client loaded via UMD in status.html
 const io = window.io;
 
 const $ = (id) => document.getElementById(id);
+
+let currencySymbol = '';
 
 function parseUrl() {
   const list = window.location.pathname.match(/^\/t\/([^/?#]+)\/orders\/?$/);
@@ -29,7 +31,17 @@ function el(tag, attrs = {}, children = []) {
 }
 
 function formatPrice(n) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
+  const num = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
+  return currencySymbol ? `${num} ${currencySymbol}` : num;
+}
+
+async function loadCurrency() {
+  try {
+    const s = await fetch('/api/public/settings').then((r) => r.json());
+    currencySymbol = s.currency || '';
+  } catch {
+    currencySymbol = '';
+  }
 }
 
 function timeAgo(sqlTimestamp) {
@@ -227,16 +239,7 @@ function connectStatusSocket(orderIds) {
 async function boot() {
   await initI18n();
   applyTranslations();
-
-  const langSelect = $('lang-select');
-  if (langSelect) {
-    langSelect.value = getLang();
-    langSelect.addEventListener('change', async (e) => {
-      await setLang(e.target.value);
-      lastSnapshot = '';
-      refresh();
-    });
-  }
+  await loadCurrency();
 
   refresh();
   setInterval(refresh, 30000); // 30s safety net — socket is primary

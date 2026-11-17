@@ -74,6 +74,16 @@
     .cart-bar.show { transform: translateY(0); }
     .cart-bar .count { background: rgba(255,255,255,0.2); padding: 0.15rem 0.5rem; border-radius: 999px; }
     .cart-bar .total { margin-left: auto; }
+    .cart-toast {
+      position: fixed; left: 50%; bottom: 5.5rem; z-index: 150;
+      transform: translate(-50%, 8px); opacity: 0;
+      background: #222; color: #fff; padding: 0.6rem 1rem;
+      border-radius: 999px; font-size: 0.9rem; white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      pointer-events: none;
+      transition: opacity 0.18s, transform 0.18s;
+    }
+    .cart-toast.show { opacity: 1; transform: translate(-50%, 0); }
     .cart-panel {
       position: fixed; inset: 0; background: rgba(0,0,0,0.4);
       display: none; align-items: flex-end; z-index: 100;
@@ -310,6 +320,6 @@
   <div id="picker-overlay" class="picker-overlay">
     <div class="picker-sheet" id="picker-sheet"></div>
   </div>
-<script type="module" src="/customer/menu.js?v=8"></script>
+<script type="module" src="/customer/menu.js?v=9"></script>
 </body>
 </html>

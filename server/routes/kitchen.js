@@ -37,12 +37,15 @@ export function kitchenRouter({ db }) {
   router.get('/orders', (req, res) => {
     const { status } = req.query;
 
-    const whereClause =
-      status === 'all'
-        ? ''
-        : `WHERE o.status IN (${ACTIVE_STATUSES.map(() => '?').join(',')})`;
-
-    const params = status === 'all' ? [] : ACTIVE_STATUSES;
+    // Cleared sessions are kept for reports but are no longer actionable on
+    // the kitchen display, so hide them from both the active and "all" views.
+    const conditions = ['o.session_ended_at IS NULL'];
+    const params = [];
+    if (status !== 'all') {
+      conditions.push(`o.status IN (${ACTIVE_STATUSES.map(() => '?').join(',')})`);
+      params.push(...ACTIVE_STATUSES);
+    }
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     const orders = db.prepare(
       `SELECT o.id, o.table_id, o.status, o.total, o.notes,
@@ -82,8 +85,13 @@ export function kitchenRouter({ db }) {
       return res.status(400).json({ error: 'invalid id' });
     }
 
-    const existing = db.prepare('SELECT id FROM orders WHERE id = ?').get(id);
+    const existing = db
+      .prepare('SELECT id, session_ended_at FROM orders WHERE id = ?')
+      .get(id);
     if (!existing) return res.status(404).json({ error: 'order not found' });
+    if (existing.session_ended_at) {
+      return res.status(410).json({ error: 'order session has ended' });
+    }
 
     const body = req.body ?? {};
     const updates = {};

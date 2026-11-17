@@ -259,3 +259,90 @@ test('PATCH /api/kitchen/orders/:id emits order:updated', { timeout: 8000 }, asy
     await stopServer(httpServer, io);
   }
 });
+
+test('order:new payload includes option snapshots', { timeout: 8000 }, async () => {
+  const { httpServer, baseUrl, app, db, io } = await startServer();
+  try {
+    const cookie = await loginAdmin(app);
+    const t = await request(app)
+      .post('/api/admin/tables').set('Cookie', cookie).send({ table_number: 'T1' });
+    const cat = await request(app)
+      .post('/api/admin/categories').set('Cookie', cookie).send({ name: 'C' });
+    const item = await request(app)
+      .post('/api/admin/menu-items').set('Cookie', cookie)
+      .send({ name: 'X', price: 5, category_id: cat.body.id });
+    const group = db.prepare(
+      "INSERT INTO menu_item_option_groups (menu_item_id, name, is_required, is_single_choice) VALUES (?, 'Size', 1, 1)"
+    ).run(item.body.id);
+    const choice = db.prepare(
+      "INSERT INTO menu_item_option_choices (group_id, name, is_default) VALUES (?, 'Large', 1)"
+    ).run(group.lastInsertRowid);
+
+    const kitchenCookie = await loginKitchen(app);
+    const { socket } = await connectSocket(baseUrl, kitchenCookie);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const newOrderPromise = new Promise((resolve) => socket.once('order:new', resolve));
+    const res = await fetch(`${baseUrl}/api/customer/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: t.body.qr_token,
+        items: [{
+          itemId: item.body.id,
+          qty: 1,
+          selections: [{
+            group_id: Number(group.lastInsertRowid),
+            choice_id: Number(choice.lastInsertRowid),
+          }],
+        }],
+      }),
+    });
+    assert.equal(res.status, 201);
+
+    const payload = await newOrderPromise;
+    assert.equal(payload.items[0].options.length, 1);
+    assert.equal(payload.items[0].options[0].group_name_snapshot, 'Size');
+    assert.equal(payload.items[0].options[0].choice_name_snapshot, 'Large');
+
+    socket.close();
+  } finally {
+    await stopServer(httpServer, io);
+  }
+});
+
+test('clear-session emits session:cleared to kitchen socket', { timeout: 8000 }, async () => {
+  const { httpServer, baseUrl, app, io } = await startServer();
+  try {
+    const cookie = await loginAdmin(app);
+    const t = await request(app)
+      .post('/api/admin/tables').set('Cookie', cookie).send({ table_number: 'T1' });
+    const cat = await request(app)
+      .post('/api/admin/categories').set('Cookie', cookie).send({ name: 'C' });
+    const item = await request(app)
+      .post('/api/admin/menu-items').set('Cookie', cookie)
+      .send({ name: 'X', price: 5, category_id: cat.body.id });
+    await fetch(`${baseUrl}/api/customer/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: t.body.qr_token, items: [{ itemId: item.body.id, qty: 1 }] }),
+    });
+
+    const { socket } = await connectSocket(baseUrl, cookie);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const clearedPromise = new Promise((resolve) => socket.once('session:cleared', resolve));
+    const res = await request(app)
+      .post(`/api/admin/tables/${t.body.id}/clear-session`).set('Cookie', cookie).send();
+    assert.equal(res.status, 200);
+    assert.equal(res.body.cleared, 1);
+
+    const payload = await clearedPromise;
+    assert.equal(payload.tableId, t.body.id);
+    assert.equal(payload.cleared, 1);
+
+    socket.close();
+  } finally {
+    await stopServer(httpServer, io);
+  }
+});

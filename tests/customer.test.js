@@ -385,6 +385,38 @@ test('order status returns order + items for the matching token', async () => {
   db.close();
 });
 
+test('order status 404 for an order from a cleared session', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'X', price: 1 });
+  const placed = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+  db.prepare('UPDATE orders SET session_ended_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(placed.body.order.id);
+
+  const res = await request(app)
+    .get(`/api/customer/orders/${placed.body.order.id}?token=${t.qr_token}`);
+  assert.equal(res.status, 404);
+  db.close();
+});
+
+test('order status 404 for an order older than the 12 hour window', async () => {
+  const { app, agent, db } = await appWithDb();
+  const t = await makeTable(agent);
+  const item = await seedMenuItem(agent, { name: 'X', price: 1 });
+  const placed = await request(app).post('/api/customer/orders').send({
+    token: t.qr_token, items: [{ itemId: item.id, qty: 1 }],
+  });
+  db.prepare("UPDATE orders SET created_at = datetime('now', '-13 hours') WHERE id = ?")
+    .run(placed.body.order.id);
+
+  const res = await request(app)
+    .get(`/api/customer/orders/${placed.body.order.id}?token=${t.qr_token}`);
+  assert.equal(res.status, 404);
+  db.close();
+});
+
 test('order status reflects updates from the kitchen', async () => {
   const { app, agent, db } = await appWithDb();
   const t = await makeTable(agent);

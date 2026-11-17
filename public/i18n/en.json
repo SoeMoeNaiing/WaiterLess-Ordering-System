@@ -17,6 +17,7 @@
   "customer.error_410": "This table is no longer active. Please ask a staff member.",
   "customer.error_network": "Network error",
   "customer.error_generic": "Could not load menu.",
+  "customer.too_many_orders": "Too many orders from this table. Please wait {seconds}s and try again.",
   "status.title": "Your orders",
   "status.confirmed": "Order confirmed",
   "status.preparing": "Being prepared",
