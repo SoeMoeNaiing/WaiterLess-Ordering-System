@@ -249,15 +249,37 @@
 
       <section class="panel" data-panel="orders">
         <div class="card">
-          <h2>Order history</h2>
-          <div class="form-row">
-            <button id="hist-today">Today</button>
-            <button id="hist-week">Last 7 days</button>
-            <button id="hist-month">Last 30 days</button>
-            <button id="hist-all">All</button>
+          <div class="card-head-row">
+            <div>
+              <h2 class="card-title" style="margin-bottom: 4px;">Order history</h2>
+              <p class="muted" id="hist-summary" style="margin: 0; font-size: var(--text-xs);">Pick a range.</p>
+            </div>
+            <button id="hist-refresh" class="btn btn-sm">
+              <svg class="icon icon-sm"><use href="/shared/icons.svg#refresh"/></svg>
+              Refresh
+            </button>
           </div>
-          <p class="muted" id="hist-summary">Pick a range.</p>
-          <div id="hist-list"></div>
+
+          <div class="history-controls">
+            <div class="history-quick">
+              <button id="hist-today" class="btn btn-sm">Today</button>
+              <button id="hist-week" class="btn btn-sm">Last 7 days</button>
+              <button id="hist-month" class="btn btn-sm">Last 30 days</button>
+              <button id="hist-all" class="btn btn-sm">All time</button>
+            </div>
+            <div class="history-range">
+              <label class="history-range-label">From</label>
+              <input id="hist-from" type="date" class="input history-date" />
+              <label class="history-range-label">To</label>
+              <input id="hist-to" type="date" class="input history-date" />
+              <button id="hist-apply" class="btn btn-sm btn-primary">
+                <svg class="icon icon-sm"><use href="/shared/icons.svg#search"/></svg>
+                Apply
+              </button>
+            </div>
+          </div>
+
+          <div id="hist-list" class="history-list"></div>
         </div>
       </section>
 
@@ -344,6 +366,6 @@
   </div>
 
 <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/admin/app.js?v=37"></script>
+  <script type="module" src="/admin/app.js?v=39"></script>
 </body>
 </html>

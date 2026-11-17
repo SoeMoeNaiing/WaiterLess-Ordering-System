@@ -877,42 +877,82 @@ function moveLiveSelection(delta) {
 
 // ---------- Order history ----------
 
-async function loadHistory(range) {
-  const now = new Date();
-  let from = '';
-  if (range === 'today') from = ymd(now);
-  else if (range === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); from = ymd(d); }
-  else if (range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 30); from = ymd(d); }
-
-  const url = from ? `/api/admin/orders?from=${from}&limit=200` : '/api/admin/orders?limit=200';
+async function loadHistory(from, to) {
   const msg = $('hist-summary');
   const root = $('hist-list');
   if (!msg || !root) return;
-  msg.textContent = 'loading…';
+
+  msg.textContent = 'Loading…';
   root.replaceChildren();
 
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  params.set('limit', '500');
+
   try {
-    const data = await api(url);
-    msg.textContent = `${data.total_count} order(s) — total ${data.total_sum.toFixed(2)}`;
+    const data = await api(`/api/admin/orders?${params.toString()}`);
+
+    const count = data.total_count;
+    const sum = Number(data.total_sum || 0).toFixed(2);
+    msg.textContent = count === 0
+      ? 'No orders in this range'
+      : `${count} order${count === 1 ? '' : 's'} · ${sum} total`;
+
     if (data.orders.length === 0) {
-      root.appendChild(el('p', { className: 'muted', text: 'No orders in this range.' }));
+      root.appendChild(el('div', {
+        className: 'history-empty',
+        text: 'No orders in this range.',
+      }));
       return;
     }
+
+    // Render header row
+    const header = el('div', { className: 'history-header' }, [
+      el('div', { className: 'history-col history-col-date', text: 'Date' }),
+      el('div', { className: 'history-col history-col-order', text: 'Order' }),
+      el('div', { className: 'history-col history-col-status', text: 'Status' }),
+      el('div', { className: 'history-col history-col-items', text: 'Items' }),
+      el('div', { className: 'history-col history-col-total', text: 'Total' }),
+    ]);
+    root.appendChild(header);
+
     for (const o of data.orders) {
-      const items = el('div', { className: 'muted' },
-        o.items.map((it) => el('div', { text: `${it.qty}× ${it.name_snapshot} — ${(it.price_snapshot * it.qty).toFixed(2)}` }))
-      );
-      root.appendChild(el('div', { className: 'row' }, [
-        el('div', { className: 'info' }, [
-          el('div', { className: 'num' }, [
-            `#${o.id} — Table ${o.table_number}`,
-            el('span', { className: `badge ${o.status === 'served' ? 'on' : o.status === 'cancelled' ? 'off' : 'idle'}`, text: o.status }),
-          ]),
-          el('div', { className: 'label', text: o.created_at }),
-          items,
+      // Format date
+      const dt = new Date(o.created_at.replace(' ', 'T') + 'Z');
+      const dateStr = dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      const statusClass =
+        o.status === 'served'    ? 'badge-active' :
+        o.status === 'cancelled' ? 'badge-inactive' :
+        o.status === 'preparing' || o.status === 'ready' ? 'badge-busy' :
+        'badge-idle';
+
+      const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
+      const totalQty = Array.isArray(o.items)
+        ? o.items.reduce((sum, it) => sum + (it.qty || 0), 0)
+        : 0;
+
+      const row = el('div', { className: 'history-row' }, [
+        el('div', { className: 'history-col history-col-date' }, [
+          el('div', { className: 'history-date-main', text: dateStr }),
+          el('div', { className: 'history-date-sub', text: timeStr }),
         ]),
-        el('div', { style: 'text-align:right; font-weight:600;', text: o.total.toFixed(2) }),
-      ]));
+        el('div', { className: 'history-col history-col-order' }, [
+          el('div', { className: 'history-order-id', text: `#${o.id}` }),
+          el('div', { className: 'history-order-table', text: `Table ${o.table_number}` }),
+        ]),
+        el('div', { className: 'history-col history-col-status' }, [
+          el('span', { className: `badge ${statusClass}`, text: o.status }),
+        ]),
+        el('div', { className: 'history-col history-col-items' }, [
+          el('div', { text: `${totalQty} item${totalQty === 1 ? '' : 's'}` }),
+          el('div', { className: 'history-items-summary', text: o.items.map((it) => `${it.qty}× ${it.name_snapshot}`).join(', ') }),
+        ]),
+        el('div', { className: 'history-col history-col-total', text: Number(o.total).toFixed(2) }),
+      ]);
+      root.appendChild(row);
     }
   } catch (e) {
     if (e.message === 'unauthorized') return;
@@ -921,11 +961,65 @@ async function loadHistory(range) {
 }
 
 function wireHistory() {
-  if (!$('hist-today')) return;
-  $('hist-today').onclick = () => loadHistory('today');
-  $('hist-week').onclick = () => loadHistory('week');
-  $('hist-month').onclick = () => loadHistory('month');
-  $('hist-all').onclick = () => loadHistory('all');
+  const todayBtn = $('hist-today');
+  if (!todayBtn) return;
+
+  const today = new Date();
+  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+  const monthAgo = new Date(today); monthAgo.setDate(today.getDate() - 30);
+
+  const setDates = (from, to) => {
+    const f = $('hist-from');
+    const t = $('hist-to');
+    if (f) f.value = from || '';
+    if (t) t.value = to || '';
+  };
+
+  todayBtn.onclick = () => {
+    const s = ymd(today);
+    setDates(s, s);
+    loadHistory(s, s);
+  };
+
+  $('hist-week').onclick = () => {
+    const f = ymd(weekAgo), t = ymd(today);
+    setDates(f, t);
+    loadHistory(f, t);
+  };
+
+  $('hist-month').onclick = () => {
+    const f = ymd(monthAgo), t = ymd(today);
+    setDates(f, t);
+    loadHistory(f, t);
+  };
+
+  $('hist-all').onclick = () => {
+    setDates('', '');
+    loadHistory('', '');
+  };
+
+  const applyBtn = $('hist-apply');
+  if (applyBtn) {
+    applyBtn.onclick = () => {
+      const f = $('hist-from')?.value || '';
+      const t = $('hist-to')?.value || '';
+      loadHistory(f, t);
+    };
+  }
+
+  const refreshBtn = $('hist-refresh');
+  if (refreshBtn) {
+    refreshBtn.onclick = () => {
+      const f = $('hist-from')?.value || '';
+      const t = $('hist-to')?.value || '';
+      loadHistory(f, t);
+    };
+  }
+
+  // Default: today
+  const s = ymd(today);
+  setDates(s, s);
+  loadHistory(s, s);
 }
 
 // ---------- Settings ----------
