@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import request from 'supertest';
 import { createApp } from '../server/app.js';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 test('GET /admin/ returns the admin HTML page', async () => {
   const app = createApp();
@@ -144,4 +149,32 @@ test('invalid JSON body returns 400', async () => {
     .send('{not json');
   assert.equal(res.status, 400);
   assert.equal(res.body.error, 'invalid JSON body');
+});
+
+// ---------- A6: design-system wiring ----------
+
+test('admin icon references resolve to symbols in icons.svg', () => {
+  const icons = readFileSync(join(ROOT, 'shared', 'icons.svg'), 'utf8');
+  const defined = new Set(
+    [...icons.matchAll(/<symbol\s+id="([^"]+)"/g)].map((m) => m[1])
+  );
+  const sources = ['admin/index.html', 'admin/app.js']
+    .map((path) => readFileSync(join(ROOT, path), 'utf8'))
+    .join('\n');
+  const referenced = new Set(
+    [...sources.matchAll(/icons\.svg#([\w-]+)/g)].map((m) => m[1])
+  );
+
+  assert.ok(referenced.size > 0, 'expected static icon references');
+  const missing = [...referenced].filter((name) => !defined.has(name));
+  assert.deepEqual(missing, [], `missing icon symbols: ${missing.join(', ')}`);
+});
+
+test('admin stylesheet defines the shared button and input primitives', () => {
+  const css = readFileSync(join(ROOT, 'admin', 'style.css'), 'utf8');
+  for (const selector of [
+    '.btn {', '.btn-sm {', '.btn-primary {', '.btn-danger {', '.btn-full {', 'input.input, select.input {',
+  ]) {
+    assert.ok(css.includes(selector), `missing CSS definition for ${selector}`);
+  }
 });

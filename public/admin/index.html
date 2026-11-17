@@ -46,12 +46,12 @@
 
     <aside class="sidebar" id="sidebar">
       <nav>
-        <button class="tab" data-tab="dashboard"><span class="tab-key">1</span> <span data-i18n="admin.tab_dashboard">Dashboard</span></button>
-        <button class="tab" data-tab="tables"><span class="tab-key">2</span> <span data-i18n="admin.tab_tables">Tables</span></button>
-        <button class="tab" data-tab="menu"><span class="tab-key">3</span> <span data-i18n="admin.tab_menu">Menu</span></button>
-        <button class="tab" data-tab="live"><span class="tab-key">4</span> <span data-i18n="admin.tab_live">Live orders</span> <span class="tab-badge" id="live-badge" style="display:none;">0</span></button>
-        <button class="tab" data-tab="orders"><span class="tab-key">5</span> <span data-i18n="admin.tab_orders">Order history</span></button>
-        <button class="tab" data-tab="settings"><span class="tab-key">6</span> <span data-i18n="admin.tab_settings">Settings</span></button>
+        <button class="tab" data-tab="dashboard"><svg class="tab-icon"><use href="/shared/icons.svg#home"/></svg><span class="tab-key">1</span> <span data-i18n="admin.tab_dashboard">Dashboard</span></button>
+        <button class="tab" data-tab="tables"><svg class="tab-icon"><use href="/shared/icons.svg#grid"/></svg><span class="tab-key">2</span> <span data-i18n="admin.tab_tables">Tables</span></button>
+        <button class="tab" data-tab="menu"><svg class="tab-icon"><use href="/shared/icons.svg#utensils"/></svg><span class="tab-key">3</span> <span data-i18n="admin.tab_menu">Menu</span></button>
+        <button class="tab" data-tab="live"><svg class="tab-icon"><use href="/shared/icons.svg#list"/></svg><span class="tab-key">4</span> <span data-i18n="admin.tab_live">Live orders</span> <span class="tab-badge" id="live-badge" style="display:none;">0</span></button>
+        <button class="tab" data-tab="orders"><svg class="tab-icon"><use href="/shared/icons.svg#clock"/></svg><span class="tab-key">5</span> <span data-i18n="admin.tab_orders">Order history</span></button>
+        <button class="tab" data-tab="settings"><svg class="tab-icon"><use href="/shared/icons.svg#settings"/></svg><span class="tab-key">6</span> <span data-i18n="admin.tab_settings">Settings</span></button>
       </nav>
       <div class="sidebar-hint">
         <kbd>1</kbd>–<kbd>6</kbd> tabs · <kbd>R</kbd> refresh · <kbd>?</kbd> help
@@ -284,34 +284,88 @@
       </section>
 
       <section class="panel" data-panel="settings">
-        <div class="card">
-          <h2>Restaurant settings</h2>
-          <div class="form-row">
-            <input id="setting-restaurant-name" type="text" placeholder="Restaurant name" />
+
+        <div class="settings-grid">
+
+          <div class="card">
+            <div class="card-head-row">
+              <h2 class="card-title" style="margin: 0;">Restaurant settings</h2>
+            </div>
+            <p class="muted" style="margin: 0 0 var(--space-4); font-size: var(--text-sm);">
+              These appear on the customer menu and receipts.
+            </p>
+
+            <div class="settings-field">
+              <label class="settings-label">Restaurant name</label>
+              <input id="setting-restaurant-name" type="text" class="input" placeholder="e.g. My Restaurant" />
+            </div>
+
+            <div class="settings-field-row">
+              <div class="settings-field">
+                <label class="settings-label">Currency</label>
+                <input id="setting-currency" type="text" class="input" placeholder="e.g. MMK" />
+              </div>
+              <div class="settings-field">
+                <label class="settings-label">Default language</label>
+                <input id="setting-default-language" type="text" class="input" placeholder="en / my" />
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <span id="settings-message" class="settings-message"></span>
+              <button id="save-settings" class="btn btn-primary">
+                <svg class="icon icon-sm"><use href="/shared/icons.svg#check"/></svg>
+                Save
+              </button>
+            </div>
           </div>
-          <div class="form-row">
-            <input id="setting-currency" type="text" placeholder="Currency (e.g. MMK)" style="max-width: 8rem;" />
-            <input id="setting-default-language" type="text" placeholder="Language (en, my)" style="max-width: 8rem;" />
-            <button id="save-settings" class="primary">Save</button>
+
+          <div class="card">
+            <div class="card-head-row">
+              <h2 class="card-title" style="margin: 0;">Security</h2>
+            </div>
+            <p class="muted" style="margin: 0 0 var(--space-4); font-size: var(--text-sm);">
+              Change the PINs used to log in. The current admin PIN is required for both.
+            </p>
+
+            <div class="settings-field">
+              <label class="settings-label">Current admin PIN</label>
+              <input id="current-pin" type="password" inputmode="numeric" class="input" placeholder="••••" />
+            </div>
+
+            <hr class="settings-divider" />
+
+            <div class="settings-subsection">
+              <h3 class="settings-subtitle">Admin PIN</h3>
+              <div class="settings-field-row">
+                <div class="settings-field" style="flex: 2;">
+                  <input id="new-admin-pin" type="password" inputmode="numeric" class="input" placeholder="New admin PIN (4-12 digits)" />
+                </div>
+                <button id="change-admin-pin" class="btn btn-primary">
+                  <svg class="icon icon-sm"><use href="/shared/icons.svg#check"/></svg>
+                  Change
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-subsection">
+              <h3 class="settings-subtitle">Kitchen PIN</h3>
+              <div class="settings-field-row">
+                <div class="settings-field" style="flex: 2;">
+                  <input id="new-kitchen-pin" type="password" inputmode="numeric" class="input" placeholder="New kitchen PIN (4-12 digits)" />
+                </div>
+                <button id="change-kitchen-pin" class="btn btn-primary">
+                  <svg class="icon icon-sm"><use href="/shared/icons.svg#check"/></svg>
+                  Change
+                </button>
+              </div>
+            </div>
+
+            <p id="security-message" class="settings-message" style="margin-top: var(--space-3);"></p>
           </div>
-          <p id="settings-message" class="muted" style="min-height: 1.2rem;"></p>
+
         </div>
-        <div class="card">
-          <h2>Security</h2>
-          <p class="muted">Change the PINs used to log in. Current admin PIN is required.</p>
-          <div class="form-row" style="margin-top: 0.75rem;">
-            <input id="current-pin" type="password" inputmode="numeric" placeholder="Current admin PIN" />
-          </div>
-          <div class="form-row">
-            <input id="new-admin-pin" type="password" inputmode="numeric" placeholder="New admin PIN (4-12 digits)" />
-            <button id="change-admin-pin" class="primary">Change admin PIN</button>
-          </div>
-          <div class="form-row">
-            <input id="new-kitchen-pin" type="password" inputmode="numeric" placeholder="New kitchen PIN (4-12 digits)" />
-            <button id="change-kitchen-pin" class="primary">Change kitchen PIN</button>
-          </div>
-          <p id="security-message" class="muted" style="min-height: 1.2rem;"></p>
-        </div>
+
       </section>
 
     </main>
@@ -366,6 +420,6 @@
   </div>
 
 <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/admin/app.js?v=39"></script>
+  <script type="module" src="/admin/app.js?v=40"></script>
 </body>
 </html>
